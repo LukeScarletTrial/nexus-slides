@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, SchemaShared } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { SlideElement } from "../types";
 
 export type AIProvider = 'gemini' | 'openai' | 'grok' | 'deepseek';
@@ -59,7 +59,7 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
   const ai = getGeminiClient(apiKey);
   
   // Relaxed Schema to avoid 400 Bad Request on strict enum mismatch
-  const schema: SchemaShared = {
+  const schema = {
      type: Type.OBJECT,
      properties: {
          reply: { type: Type.STRING },
