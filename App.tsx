@@ -450,12 +450,12 @@ function Dashboard({ user, onCreate, onCreateWebsite, onOpen, onLogin, onReportB
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+      <nav className="bg-white border-b border-gray-200 px-6 py-4 pt-safe flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
             <Square className="text-white w-6 h-6 fill-current" />
           </div>
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">Nexus Presentations</span>
+          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">Nexus</span>
         </div>
         <div className="flex items-center gap-4">
           {user ? (
@@ -504,20 +504,20 @@ function Dashboard({ user, onCreate, onCreateWebsite, onOpen, onLogin, onReportB
         ) : (
           <div className="animate-fade-in">
 
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
               <h2 className="text-2xl font-bold text-gray-800">Your Projects</h2>
-              <div className="flex gap-3">
+              <div className="flex gap-3 w-full sm:w-auto">
                   <button 
                     onClick={onCreateWebsite}
-                    className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium shadow-sm hover:shadow-md"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium shadow-sm hover:shadow-md whitespace-nowrap"
                   >
-                    <Globe size={20} className="text-blue-500" /> New Website
+                    <Globe size={20} className="text-blue-500" /> <span className="hidden sm:inline">New </span>Web<span className="hidden sm:inline">site</span>
                   </button>
                   <button 
                     onClick={onCreate}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-medium shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-medium shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap"
                   >
-                    <Plus size={20} /> New Presentation
+                    <Plus size={20} /> <span className="hidden sm:inline">New </span>Slide<span className="hidden sm:inline">s</span>
                   </button>
               </div>
             </div>
@@ -551,8 +551,8 @@ function Dashboard({ user, onCreate, onCreateWebsite, onOpen, onLogin, onReportB
                        </div>
                     </div>
                     <div className="p-4 border-t border-gray-100 bg-white flex justify-between items-center">
-                       <div>
-                         <h3 className="font-semibold text-gray-800 truncate max-w-[160px]">{pres.title}</h3>
+                       <div className="w-full pr-2">
+                         <h3 className="font-semibold text-gray-800 truncate">{pres.title}</h3>
                          <p className="text-xs text-gray-500">{new Date(pres.lastModified).toLocaleDateString()}</p>
                        </div>
                        <button 
@@ -1136,32 +1136,32 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans">
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-20 shadow-sm">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500">
+    <div className="h-safe-screen flex flex-col bg-gray-50 text-gray-900 font-sans overflow-hidden">
+      <header className="h-auto min-h-[4rem] bg-white border-b border-gray-200 flex flex-wrap items-center justify-between px-4 py-2 pt-safe z-20 shadow-sm gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1">
+          <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 shrink-0">
              <ChevronLeft />
           </button>
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0 max-w-[120px] sm:max-w-[200px] lg:max-w-xs">
              <input 
                value={presentation.title}
                onChange={(e) => setPresentation({...presentation, title: e.target.value})}
-               className="font-semibold text-lg leading-tight bg-transparent border-none outline-none focus:ring-1 focus:ring-indigo-500 rounded px-1"
+               className="font-semibold text-base sm:text-lg leading-tight bg-transparent border-none outline-none focus:ring-1 focus:ring-indigo-500 rounded px-1 w-full truncate"
              />
              <div className="text-xs flex items-center gap-1">
                 {isWebsite && <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 rounded mr-1">WEB</span>}
                 <span className={`${saveStatus === 'unsaved' ? 'text-amber-500' : 'text-gray-400'}`}>
-                    {saveStatus === 'saving' ? 'Saving...' : (saveStatus === 'unsaved' ? 'Unsaved changes' : 'All changes saved')}
+                    {saveStatus === 'saving' ? 'Saving...' : (saveStatus === 'unsaved' ? 'Unsaved' : 'Saved')}
                 </span>
              </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Manual Save Button */}
           <button 
              onClick={handleManualSave}
-             className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-all border ${
+             className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-all border shrink-0 ${
                  saveStatus === 'unsaved' 
                     ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' 
                     : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -1169,36 +1169,36 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
              title="Save Project"
           >
              <Save size={16} /> 
-             <span className="hidden sm:inline">Save</span>
+             <span className="hidden lg:inline">Save</span>
           </button>
 
           <button 
             onClick={() => setIsChatOpen(!isChatOpen)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-md bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-90"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-md bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-90 shrink-0"
             title="Nexus Assistant AI"
           >
             <Sparkles size={16} className={aiLoading ? 'animate-pulse' : ''} />
-            <span className="hidden sm:inline">Nexus Assistant AI</span>
+            <span className="hidden lg:inline">Nexus Assistant AI</span>
           </button>
           
-          <div className="h-8 w-px bg-gray-200 mx-1"></div>
+          <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block"></div>
           
           {isWebsite ? (
-             <button onClick={() => setIsCodeModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 rounded-lg font-medium text-sm">
-               <Code size={16} /> Export Code
+             <button onClick={() => setIsCodeModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 rounded-lg font-medium text-sm shrink-0">
+               <Code size={16} /> <span className="hidden sm:inline">Code</span>
              </button>
           ) : (
             <>
-              <button onClick={() => setPlayMode('present')} className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-sm">
-                <Play size={16} fill="currentColor" /> Present
+              <button onClick={() => setPlayMode('present')} className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-sm shrink-0">
+                <Play size={16} fill="currentColor" /> <span className="hidden sm:inline">Present</span>
               </button>
               
               <div className="relative">
                   <button 
                     onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 rounded-lg font-medium text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 rounded-lg font-medium text-sm shrink-0"
                   >
-                    <Download size={16} /> Export
+                    <Download size={16} /> <span className="hidden sm:inline">Export</span>
                   </button>
                   
                   {isExportMenuOpen && (
@@ -1231,7 +1231,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        <aside className="w-20 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-4 z-20 shadow-sm">
+        <aside className="w-16 sm:w-20 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-4 z-20 shadow-sm shrink-0">
           <SidebarTool icon={<Type />} label="Text" onClick={() => { setActiveDrawer('none'); addElement('text'); }} />
           <SidebarTool icon={<MousePointerClick />} label="Button" onClick={() => { setActiveDrawer('none'); addElement('button'); }} />
           <SidebarTool icon={<Square />} label="Elements" isActive={activeDrawer === 'shapes'} onClick={() => setActiveDrawer(activeDrawer === 'shapes' ? 'none' : 'shapes')} />
@@ -1241,7 +1241,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
 
         {/* Drawers - (Existing Drawers) */}
         {activeDrawer === 'shapes' && (
-          <div className="absolute left-20 top-0 bottom-0 w-64 bg-white border-r border-gray-200 z-10 p-4 animate-slide-right overflow-y-auto">
+          <div className="absolute left-16 sm:left-20 top-0 bottom-0 w-64 bg-white border-r border-gray-200 z-10 p-4 animate-slide-right overflow-y-auto shadow-xl">
              <div className="flex justify-between items-center mb-4">
                <h3 className="font-bold text-gray-800">Shapes</h3>
                <button onClick={() => setActiveDrawer('none')} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
@@ -1259,7 +1259,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
         )}
 
         {activeDrawer === 'images' && (
-          <div className="absolute left-20 top-0 bottom-0 w-80 bg-white border-r border-gray-200 z-10 p-4 animate-slide-right overflow-y-auto flex flex-col">
+          <div className="absolute left-16 sm:left-20 top-0 bottom-0 w-80 bg-white border-r border-gray-200 z-10 p-4 animate-slide-right overflow-y-auto flex flex-col shadow-xl">
              <div className="flex justify-between items-center mb-4">
                <h3 className="font-bold text-gray-800">Images</h3>
                <button onClick={() => setActiveDrawer('none')} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
@@ -1286,7 +1286,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
         )}
 
         {activeDrawer === 'video' && (
-           <div className="absolute left-20 top-0 bottom-0 w-80 bg-white border-r border-gray-200 z-10 p-4 animate-slide-right overflow-y-auto flex flex-col">
+           <div className="absolute left-16 sm:left-20 top-0 bottom-0 w-80 bg-white border-r border-gray-200 z-10 p-4 animate-slide-right overflow-y-auto flex flex-col shadow-xl">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="font-bold text-gray-800">Video</h3>
                  <button onClick={() => setActiveDrawer('none')} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
@@ -1320,9 +1320,9 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
         )}
 
         {/* Workspace */}
-        <main className="flex-1 flex flex-col relative bg-gray-100 overflow-hidden" onClick={() => { setActiveDrawer('none'); setSelectedElementId(null); }}>
+        <main className="flex-1 flex flex-col relative bg-gray-100 overflow-hidden pb-safe" onClick={() => { setActiveDrawer('none'); setSelectedElementId(null); }}>
           {selectedElement ? (
-             <div className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-4 z-10 animate-fade-in shadow-sm overflow-x-auto" onClick={e => e.stopPropagation()}>
+             <div className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-4 z-10 animate-fade-in shadow-sm overflow-x-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
                 {/* Element Type */}
                 <div className="flex items-center gap-2 border-r pr-4 border-gray-200 shrink-0">
                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{selectedElement.type}</span>
@@ -1435,7 +1435,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                 </div>
              </div>
           ) : (
-            <div className="h-14 bg-white border-b border-gray-200 flex items-center px-6 gap-4 z-10">
+            <div className="h-14 bg-white border-b border-gray-200 flex items-center px-6 gap-4 z-10 shrink-0">
                <span className="text-sm text-gray-400">Select an element to edit properties</span>
             </div>
           )}
@@ -1466,7 +1466,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
             </div>
           </div>
 
-          <div className="h-44 bg-white border-t border-gray-200 flex flex-col z-10" onClick={e => e.stopPropagation()}>
+          <div className="h-44 bg-white border-t border-gray-200 flex flex-col z-10 shrink-0" onClick={e => e.stopPropagation()}>
              <div className="flex justify-between items-center px-4 py-2 border-b border-gray-100">
                <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                  <Layout size={14}/> {isWebsite ? 'Pages' : 'Timeline'}
@@ -1474,7 +1474,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                
                {!isWebsite && (
                    <div className="flex items-center gap-4">
-                     <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                     <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded hidden sm:flex">
                         <ArrowRightLeft size={14} />
                         <select 
                           value={currentSlide.transition || 'none'} 
@@ -1490,7 +1490,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                         </select>
                      </div>
 
-                     <div className="flex gap-2 text-xs text-gray-500">
+                     <div className="flex gap-2 text-xs text-gray-500 hidden sm:flex">
                        <span>Duration: {currentSlide.duration}s</span>
                        <input type="range" min="1" max="10" value={currentSlide.duration} onChange={(e) => updateSlide({...currentSlide, duration: parseInt(e.target.value)})} className="w-20 accent-indigo-600" />
                      </div>
@@ -1567,12 +1567,12 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                     animate={{ x: 0 }}
                     exit={{ x: '100%' }}
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    className="w-96 bg-white border-l border-gray-200 z-30 shadow-xl flex flex-col absolute right-0 top-0 bottom-0"
+                    className="w-80 sm:w-96 bg-white border-l border-gray-200 z-30 shadow-xl flex flex-col absolute right-0 top-0 bottom-0"
                 >
-                    <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-indigo-600 text-white">
+                    <div className="p-4 pt-safe border-b border-gray-200 flex items-center justify-between bg-indigo-600 text-white">
                         <div className="flex items-center gap-2">
                             <Sparkles size={18} />
-                            <h3 className="font-bold">Nexus Assistant AI</h3>
+                            <h3 className="font-bold">Nexus AI</h3>
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => setShowSettings(!showSettings)} className="p-1 hover:bg-white/20 rounded" title="AI Settings">
@@ -1668,7 +1668,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <form onSubmit={handleChatSubmit} className="p-3 border-t border-gray-200 bg-white flex gap-2">
+                    <form onSubmit={handleChatSubmit} className="p-3 border-t border-gray-200 bg-white flex gap-2 pb-safe">
                         <input
                             type="text"
                             value={chatInput}
@@ -1703,207 +1703,192 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   );
 }
 
-function PresentationPlayer({ presentation, onExit, autoPlay, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const totalSlides = presentation.slides.length;
-
+function PresentationPlayer({ presentation, onExit, autoPlay = false, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
-      if (e.key === 'ArrowLeft') prevSlide();
-      if (e.key === 'Escape') onExit();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSlide, onExit]);
+    if (!isPlaying) return;
+    const slide = presentation.slides[currentSlideIndex];
+    const timer = setTimeout(() => {
+        if (currentSlideIndex < presentation.slides.length - 1) {
+            setCurrentSlideIndex(prev => prev + 1);
+        } else {
+            setIsPlaying(false);
+            if (onComplete) onComplete();
+        }
+    }, slide.duration * 1000);
+    return () => clearTimeout(timer);
+  }, [currentSlideIndex, isPlaying, presentation.slides, onComplete]);
 
+  // Fullscreen support
   useEffect(() => {
-      if (autoPlay) {
-          const timer = setTimeout(() => {
-              if (currentSlide < totalSlides - 1) {
-                  setCurrentSlide(prev => prev + 1);
-              } else {
-                  if (onComplete) onComplete();
-              }
-          }, (presentation.slides[currentSlide].duration || 3) * 1000);
-          return () => clearTimeout(timer);
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(e => console.log(e));
+      return () => {
+          if (document.exitFullscreen) document.exitFullscreen().catch(e => console.log(e));
+      };
+  }, []);
+
+  const handleNext = () => {
+      if (currentSlideIndex < presentation.slides.length - 1) {
+          setCurrentSlideIndex(prev => prev + 1);
       }
-  }, [autoPlay, currentSlide, totalSlides, onComplete]);
-
-  const nextSlide = () => {
-    if (currentSlide < totalSlides - 1) setCurrentSlide(currentSlide + 1);
   };
 
-  const prevSlide = () => {
-    if (currentSlide > 0) setCurrentSlide(currentSlide - 1);
+  const handlePrev = () => {
+      if (currentSlideIndex > 0) {
+          setCurrentSlideIndex(prev => prev - 1);
+      }
   };
+
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'ArrowRight' || e.key === ' ') handleNext();
+          if (e.key === 'ArrowLeft') handlePrev();
+          if (e.key === 'Escape') onExit();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentSlideIndex]);
+
+  const currentSlide = presentation.slides[currentSlideIndex];
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-       <div className="relative w-full h-full flex items-center justify-center">
-          <div className="relative overflow-hidden shadow-2xl w-full h-full flex items-center justify-center">
-             <AnimatePresence mode="wait">
-                 <motion.div
-                    key={currentSlide}
-                    variants={variants[presentation.slides[currentSlide].transition || 'fade']}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    className="absolute inset-0 w-full h-full flex items-center justify-center"
-                 >
-                    <ResponsiveSlideView 
-                        slide={presentation.slides[currentSlide]} 
-                        onNavigate={(link) => {
-                             const targetIndex = presentation.slides.findIndex(s => s.name === link || s.id === link);
-                             if(targetIndex !== -1) setCurrentSlide(targetIndex);
-                             else if (link.startsWith('http')) window.open(link, '_blank');
-                        }}
-                    />
-                 </motion.div>
-             </AnimatePresence>
-          </div>
-       </div>
-
-       {!autoPlay && (
-           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur px-6 py-3 rounded-full text-white transition-opacity opacity-0 hover:opacity-100 z-50">
-              <button onClick={prevSlide} className="hover:text-indigo-400"><ChevronLeft size={24} /></button>
-              <span className="font-mono">{currentSlide + 1} / {totalSlides}</span>
-              <button onClick={nextSlide} className="hover:text-indigo-400"><ChevronRight size={24} /></button>
-              <button onClick={onExit} className="ml-4 hover:text-red-400"><X size={24} /></button>
-           </div>
-       )}
-    </div>
-  );
-}
-
-function ResponsiveSlideView({ slide, onNavigate }: { slide: Slide, onNavigate: (l: string) => void }) {
-    const [scale, setScale] = useState(1);
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleResize = () => {
-            if(containerRef.current) {
-                const { clientWidth, clientHeight } = containerRef.current;
-                const scaleX = clientWidth / 960;
-                const scaleY = clientHeight / 540;
-                setScale(Math.min(scaleX, scaleY));
-            }
-        };
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
-    return (
-        <div ref={containerRef} className="w-full h-full flex items-center justify-center">
-             <div style={{ width: 960, height: 540, transform: `scale(${scale})`, transformOrigin: 'center' }}>
-                 <SlideEditor slide={slide} selectedElementId={null} onElementUpdate={()=>{}} onElementSelect={()=>{}} scale={1} mode="view" onNavigate={onNavigate} />
+      <div className="fixed inset-0 z-50 bg-black text-white flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-full flex items-center justify-center">
+             <div style={{ width: 960, height: 540, transform: 'scale(1.5)', transformOrigin: 'center' }}>
+                 <AnimatePresence mode='wait'>
+                    <motion.div
+                        key={currentSlide.id}
+                        variants={getSlideTransition(currentSlide.transition)}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="absolute inset-0"
+                    >
+                         <SlideEditor 
+                            slide={currentSlide} 
+                            selectedElementId={null} 
+                            onElementUpdate={() => {}} 
+                            onElementSelect={() => {}} 
+                            scale={1}
+                            mode="view"
+                            onNavigate={(link) => {
+                                const targetIndex = presentation.slides.findIndex(s => s.id === link || s.name === link);
+                                if (targetIndex !== -1) setCurrentSlideIndex(targetIndex);
+                                else if (link?.startsWith('http')) window.open(link, '_blank');
+                            }}
+                         />
+                    </motion.div>
+                 </AnimatePresence>
              </div>
-        </div>
-    );
+          </div>
+
+          <button onClick={onExit} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white z-50">
+              <X size={24} />
+          </button>
+
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4 bg-black/50 backdrop-blur px-4 py-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+              <button onClick={handlePrev} disabled={currentSlideIndex === 0} className="p-2 hover:bg-white/20 rounded-full disabled:opacity-30"><ChevronLeft /></button>
+              <span className="flex items-center text-sm font-medium">{currentSlideIndex + 1} / {presentation.slides.length}</span>
+              <button onClick={handleNext} disabled={currentSlideIndex === presentation.slides.length - 1} className="p-2 hover:bg-white/20 rounded-full disabled:opacity-30"><ChevronRight /></button>
+          </div>
+      </div>
+  );
 }
 
 function SidebarTool({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl transition-all ${isActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600'}`}
-    >
-      {React.cloneElement(icon as React.ReactElement, { size: 24 })}
-      <span className="text-[10px] font-medium mt-1">{label}</span>
-    </button>
-  );
+    return (
+        <button 
+           onClick={onClick}
+           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all w-14 ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+        >
+           <div className={`p-2 rounded-lg ${isActive ? 'bg-indigo-100' : ''}`}>{icon}</div>
+           <span className="text-[10px] font-medium">{label}</span>
+        </button>
+    );
 }
 
 function ShapeButton({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) {
     return (
-        <button onClick={onClick} className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all text-gray-600 hover:text-indigo-600 gap-2">
-            {React.cloneElement(icon as React.ReactElement, { size: 24 })}
-            <span className="text-xs">{label}</span>
+        <button 
+           onClick={onClick}
+           className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl border border-gray-100 hover:border-indigo-200 transition-all text-gray-600"
+        >
+           {icon}
+           <span className="text-xs font-medium">{label}</span>
         </button>
     );
 }
 
 function CodeExportModal({ presentation, onClose }: { presentation: Presentation, onClose: () => void }) {
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${presentation.title}</title>
+<style>
+  body { margin: 0; padding: 0; font-family: sans-serif; overflow-x: hidden; }
+  .page { min-height: 100vh; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; background-size: cover; background-position: center; }
+  .content { position: relative; width: 100%; max-width: 960px; height: 540px; }
+  .element { position: absolute; display: flex; align-items: center; justify-content: center; }
+  @media (max-width: 768px) {
+      .content { transform: scale(0.5); transform-origin: top center; height: auto; padding-bottom: 56.25%; }
+  }
+</style>
+</head>
+<body>
+${presentation.slides.map(slide => `
+  <div id="${slide.name || slide.id}" class="page" style="background-color: ${slide.backgroundColor}; ${slide.backgroundImage ? `background-image: url('${slide.backgroundImage}');` : ''}">
+     <div class="content">
+        ${slide.elements.map(el => {
+            const style = `left: ${el.position.x}px; top: ${el.position.y}px; width: ${el.size.width}px; height: ${el.size.height}px; z-index: ${el.style.zIndex}; 
+                           font-size: ${el.style.fontSize}px; font-family: ${el.style.fontFamily}, sans-serif; color: ${el.style.color}; 
+                           background-color: ${el.style.backgroundColor || 'transparent'}; border-radius: ${el.style.borderRadius}px;
+                           opacity: ${el.style.opacity || 1}; text-align: ${el.style.textAlign || 'left'}; 
+                           justify-content: ${el.style.textAlign === 'center' ? 'center' : (el.style.textAlign === 'right' ? 'flex-end' : 'flex-start')};`;
+            
+            let contentHtml = '';
+            if(el.type === 'text') contentHtml = el.content;
+            if(el.type === 'image') contentHtml = `<img src="${el.content}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />`;
+            if(el.type === 'button') contentHtml = `<a href="${el.link || '#'}" style="text-decoration:none; color:inherit; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">${el.content}</a>`;
+            
+            return `<div class="element" style="${style}">${contentHtml}</div>`;
+        }).join('')}
+     </div>
+  </div>
+`).join('')}
+</body>
+</html>`;
+
     const [copied, setCopied] = useState(false);
-    const generateCode = () => {
-        return `
-import React from 'react';
-
-export default function ${presentation.title.replace(/[^a-zA-Z0-9]/g, '')}Website() {
-  return (
-    <div className="w-full min-h-screen bg-white">
-      ${presentation.slides.map(slide => `
-      {/* Section: ${slide.name} */}
-      <section 
-        id="${slide.name?.toLowerCase().replace(/\s/g, '-')}"
-        className="relative w-full overflow-hidden flex flex-col items-center justify-center"
-        style={{ 
-            minHeight: '100vh',
-            backgroundColor: '${slide.backgroundColor}',
-            ${slide.backgroundImage ? `backgroundImage: 'url(${slide.backgroundImage})', backgroundSize: 'cover', backgroundPosition: 'center'` : ''}
-        }}
-      >
-         <div className="relative w-full max-w-6xl mx-auto h-full min-h-[600px]">
-            ${slide.elements.map(el => {
-                const left = (el.position.x / 960) * 100;
-                const top = (el.position.y / 540) * 100;
-                const width = (el.size.width / 960) * 100;
-                return `
-                <div 
-                   style={{
-                      position: 'absolute',
-                      left: '${left}%',
-                      top: '${top}%',
-                      width: '${width}%',
-                      zIndex: ${el.style.zIndex},
-                      ${el.type === 'text' ? `
-                      fontSize: 'clamp(1rem, ${el.style.fontSize ? el.style.fontSize/16 : 1}vw, ${(el.style.fontSize || 16) * 2}px)',
-                      color: '${el.style.color}',
-                      textAlign: '${el.style.textAlign || 'left'}',
-                      fontFamily: '${el.style.fontFamily}, sans-serif',
-                      ` : ''}
-                   }}
-                   className="${el.type === 'button' ? 'bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform cursor-pointer' : ''}"
-                >
-                   ${el.type === 'text' ? el.content : ''}
-                   ${el.type === 'image' ? `<img src="${el.content}" alt="" className="w-full h-full object-cover rounded-lg shadow-sm" />` : ''}
-                   ${el.type === 'button' ? `<a href="${el.link || '#'}" className="px-6 py-3 w-full h-full flex items-center justify-center text-inherit no-underline">${el.content}</a>` : ''}
-                </div>`;
-            }).join('\n            ')}
-         </div>
-      </section>
-      `).join('\n')}
-    </div>
-  );
-}
-        `.trim();
-    };
-
-    const code = generateCode();
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(code);
+        navigator.clipboard.writeText(html);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><Code size={20} className="text-indigo-600"/> Export React Code</h3>
-                    <div className="flex gap-2">
-                         <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium text-sm transition-colors">
-                            {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copied!' : 'Copy Code'}
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 className="text-xl font-bold flex items-center gap-2"><Code className="text-indigo-600" /> Export Code</h2>
+                    <div className="flex items-center gap-2">
+                         <button onClick={handleCopy} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+                            {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copied' : 'Copy Code'}
                          </button>
-                         <button onClick={onClose} className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-500"><X size={20} /></button>
+                         <button onClick={onClose}><X size={24} className="text-gray-400" /></button>
                     </div>
                 </div>
-                <div className="flex-1 overflow-auto p-0 bg-[#1e1e1e]">
-                    <pre className="p-6 text-sm font-mono text-gray-300 leading-relaxed overflow-x-auto">
-                        <code>{code}</code>
-                    </pre>
+                <div className="flex-1 overflow-hidden relative bg-gray-900 text-gray-300 font-mono text-sm">
+                    <textarea 
+                        className="w-full h-full bg-transparent p-4 outline-none resize-none"
+                        value={html}
+                        readOnly
+                    />
                 </div>
             </div>
         </div>
