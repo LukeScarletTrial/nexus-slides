@@ -1,0 +1,8 @@
+{
+  "name": "Nexus Presentations",
+  "description": "A powerful, Canva-like presentation editor featuring drag-and-drop design, timeline animations, and generative AI tools powered by Gemini.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
