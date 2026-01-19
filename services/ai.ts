@@ -46,8 +46,11 @@ Design Rules:
 2. Fonts: Inter, Roboto, Playfair Display.
 3. Layout: Clean, professional, high contrast.
 4. Backgrounds: Use 'backgroundImagePrompt' for title slides, cover pages, or when the user requests specific imagery (e.g., "city skyline", "nature", "space"). For text-heavy slides, use solid 'backgroundColor'.
-5. Output: If request is for slides, generate 3-5 high-quality slides.
-6. Speed: Be concise. Do not explain. Just generate.
+5. Slide Count & Depth: 
+   - **User Specified**: If the user asks for a specific number (e.g., "10 slides"), YOU MUST generate exactly that many.
+   - **Auto-Detect**: If no number is specified, analyze the complexity of the prompt. Generate as many slides as necessary to cover the topic comprehensively. Do not arbitrarily limit to small numbers. If the input is a long article, create enough slides to summarize it effectively (e.g., 10-20 slides if needed).
+6. Long Input Handling: If the user provides a very long text, break it down logically into distinct slides. Summarize key points.
+7. Speed: Be concise. Do not explain. Just generate.
 `;
 
 // --- Gemini Implementation ---
@@ -104,7 +107,12 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
   try {
       const response = await ai.models.generateContent({
         model: model || 'gemini-3-flash-preview',
-        contents: prompt,
+        contents: [
+            {
+                role: 'user',
+                parts: [{ text: prompt }]
+            }
+        ],
         config: {
           systemInstruction: SYSTEM_PROMPT,
           responseMimeType: "application/json",
