@@ -1669,17 +1669,22 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                     </div>
 
                     <form onSubmit={handleChatSubmit} className="p-3 border-t border-gray-200 bg-white flex gap-2 pb-safe">
-                        <input
-                            type="text"
+                        <textarea
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
-                            placeholder="Type a message..."
-                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Type a message or paste a long article..."
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] max-h-32 resize-none"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleChatSubmit();
+                                }
+                            }}
                         />
                         <button 
                             type="submit" 
                             disabled={aiLoading || !chatInput.trim()}
-                            className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                            className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors h-[44px]"
                         >
                             <Send size={18} />
                         </button>
@@ -1703,194 +1708,211 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   );
 }
 
-function PresentationPlayer({ presentation, onExit, autoPlay = false, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(autoPlay);
-  
-  useEffect(() => {
-    if (!isPlaying) return;
-    const slide = presentation.slides[currentSlideIndex];
-    const timer = setTimeout(() => {
-        if (currentSlideIndex < presentation.slides.length - 1) {
-            setCurrentSlideIndex(prev => prev + 1);
-        } else {
-            setIsPlaying(false);
-            if (onComplete) onComplete();
-        }
-    }, slide.duration * 1000);
-    return () => clearTimeout(timer);
-  }, [currentSlideIndex, isPlaying, presentation.slides, onComplete]);
-
-  // Fullscreen support
-  useEffect(() => {
-      const el = document.documentElement;
-      if (el.requestFullscreen) el.requestFullscreen().catch(e => console.log(e));
-      return () => {
-          if (document.exitFullscreen) document.exitFullscreen().catch(e => console.log(e));
-      };
-  }, []);
-
-  const handleNext = () => {
-      if (currentSlideIndex < presentation.slides.length - 1) {
-          setCurrentSlideIndex(prev => prev + 1);
-      }
-  };
-
-  const handlePrev = () => {
-      if (currentSlideIndex > 0) {
-          setCurrentSlideIndex(prev => prev - 1);
-      }
-  };
-
-  useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === 'ArrowRight' || e.key === ' ') handleNext();
-          if (e.key === 'ArrowLeft') handlePrev();
-          if (e.key === 'Escape') onExit();
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSlideIndex]);
-
-  const currentSlide = presentation.slides[currentSlideIndex];
-
+function SidebarTool({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) {
   return (
-      <div className="fixed inset-0 z-50 bg-black text-white flex items-center justify-center overflow-hidden">
-          <div className="relative w-full h-full flex items-center justify-center">
-             <div style={{ width: 960, height: 540, transform: 'scale(1.5)', transformOrigin: 'center' }}>
-                 <AnimatePresence mode='wait'>
-                    <motion.div
-                        key={currentSlide.id}
-                        variants={getSlideTransition(currentSlide.transition)}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        className="absolute inset-0"
-                    >
-                         <SlideEditor 
-                            slide={currentSlide} 
-                            selectedElementId={null} 
-                            onElementUpdate={() => {}} 
-                            onElementSelect={() => {}} 
-                            scale={1}
-                            mode="view"
-                            onNavigate={(link) => {
-                                const targetIndex = presentation.slides.findIndex(s => s.id === link || s.name === link);
-                                if (targetIndex !== -1) setCurrentSlideIndex(targetIndex);
-                                else if (link?.startsWith('http')) window.open(link, '_blank');
-                            }}
-                         />
-                    </motion.div>
-                 </AnimatePresence>
-             </div>
-          </div>
-
-          <button onClick={onExit} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white z-50">
-              <X size={24} />
-          </button>
-
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4 bg-black/50 backdrop-blur px-4 py-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
-              <button onClick={handlePrev} disabled={currentSlideIndex === 0} className="p-2 hover:bg-white/20 rounded-full disabled:opacity-30"><ChevronLeft /></button>
-              <span className="flex items-center text-sm font-medium">{currentSlideIndex + 1} / {presentation.slides.length}</span>
-              <button onClick={handleNext} disabled={currentSlideIndex === presentation.slides.length - 1} className="p-2 hover:bg-white/20 rounded-full disabled:opacity-30"><ChevronRight /></button>
-          </div>
-      </div>
+      <button 
+        onClick={onClick}
+        className={`w-full flex flex-col items-center gap-1 p-2 transition-colors relative ${isActive ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+      >
+        {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-600 rounded-r" />}
+        <div className="p-1">{icon}</div>
+        <span className="text-[10px] font-medium">{label}</span>
+      </button>
   );
 }
 
-function SidebarTool({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) {
-    return (
-        <button 
-           onClick={onClick}
-           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all w-14 ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
-        >
-           <div className={`p-2 rounded-lg ${isActive ? 'bg-indigo-100' : ''}`}>{icon}</div>
-           <span className="text-[10px] font-medium">{label}</span>
-        </button>
-    );
+function ShapeButton({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) {
+  return (
+      <button 
+        onClick={onClick}
+        className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all gap-2 aspect-square"
+      >
+        {icon}
+        <span className="text-xs">{label}</span>
+      </button>
+  );
 }
 
-function ShapeButton({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) {
+function PresentationPlayer({ presentation, onExit, autoPlay = false, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
+    const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+    useEffect(() => {
+        const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+    
+    useEffect(() => {
+        if (autoPlay) {
+            const timer = setTimeout(() => {
+                if (currentSlideIndex < presentation.slides.length - 1) {
+                    setCurrentSlideIndex(prev => prev + 1);
+                } else {
+                    if (onComplete) onComplete();
+                }
+            }, (presentation.slides[currentSlideIndex].duration || 3) * 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [autoPlay, currentSlideIndex, presentation.slides, onComplete]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onExit();
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                setCurrentSlideIndex(prev => Math.min(prev + 1, presentation.slides.length - 1));
+            }
+            if (e.key === 'ArrowLeft') {
+                setCurrentSlideIndex(prev => Math.max(prev - 1, 0));
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [presentation.slides.length, onExit]);
+
+    const currentSlide = presentation.slides[currentSlideIndex];
+    // Calculate scale to fit 960x540 into window
+    const scale = Math.min(windowSize.width / 960, windowSize.height / 540);
+
     return (
-        <button 
-           onClick={onClick}
-           className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl border border-gray-100 hover:border-indigo-200 transition-all text-gray-600"
-        >
-           {icon}
-           <span className="text-xs font-medium">{label}</span>
-        </button>
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center overflow-hidden">
+           {/* Render Slide */}
+           <div className="relative" style={{ width: 960 * scale, height: 540 * scale }}>
+               <AnimatePresence mode="wait">
+                   <motion.div
+                      key={currentSlide.id}
+                      variants={getSlideTransition(currentSlide.transition)}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      className="absolute inset-0"
+                   >
+                      <SlideEditor 
+                          slide={currentSlide} 
+                          selectedElementId={null} 
+                          onElementUpdate={() => {}} 
+                          onElementSelect={() => {}} 
+                          scale={scale}
+                          mode="view"
+                          onNavigate={(link) => {
+                             const targetIndex = presentation.slides.findIndex(s => s.name === link || s.id === link);
+                             if (targetIndex !== -1) setCurrentSlideIndex(targetIndex);
+                          }}
+                      />
+                   </motion.div>
+               </AnimatePresence>
+           </div>
+
+           {/* Controls */}
+           {!autoPlay && (
+               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4 items-center bg-white/10 backdrop-blur-md px-6 py-3 rounded-full text-white transition-opacity hover:bg-white/20">
+                   <button onClick={() => setCurrentSlideIndex(prev => Math.max(0, prev - 1))} className="hover:text-indigo-400 disabled:opacity-30" disabled={currentSlideIndex === 0}><ChevronLeft /></button>
+                   <span className="text-sm font-medium select-none">{currentSlideIndex + 1} / {presentation.slides.length}</span>
+                   <button onClick={() => setCurrentSlideIndex(prev => Math.min(presentation.slides.length - 1, prev + 1))} className="hover:text-indigo-400 disabled:opacity-30" disabled={currentSlideIndex === presentation.slides.length - 1}><ChevronRight /></button>
+                   <div className="w-px h-4 bg-white/20 mx-2"></div>
+                   <button onClick={onExit} className="hover:text-red-400"><X size={20} /></button>
+               </div>
+           )}
+        </div>
     );
 }
 
 function CodeExportModal({ presentation, onClose }: { presentation: Presentation, onClose: () => void }) {
-    const html = `<!DOCTYPE html>
+    const [copied, setCopied] = useState(false);
+    
+    const code = `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${presentation.title}</title>
-<style>
-  body { margin: 0; padding: 0; font-family: sans-serif; overflow-x: hidden; }
-  .page { min-height: 100vh; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; background-size: cover; background-position: center; }
-  .content { position: relative; width: 100%; max-width: 960px; height: 540px; }
-  .element { position: absolute; display: flex; align-items: center; justify-content: center; }
-  @media (max-width: 768px) {
-      .content { transform: scale(0.5); transform-origin: top center; height: auto; padding-bottom: 56.25%; }
-  }
-</style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>${presentation.title}</title>
+ <script src="https://cdn.tailwindcss.com"></script>
+ <style>
+    body { margin: 0; overflow-x: hidden; scroll-behavior: smooth; }
+    .slide-section {
+       position: relative;
+       width: 100vw;
+       min-height: 100vh;
+       overflow: hidden;
+       background-size: cover;
+       background-position: center;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+    }
+    .content-wrapper {
+        position: relative;
+        width: 100%;
+        max-width: 1200px;
+        aspect-ratio: 16/9;
+    }
+    @media (max-width: 768px) {
+        .content-wrapper {
+            height: 100vh;
+            width: auto;
+            aspect-ratio: auto;
+        }
+    }
+ </style>
 </head>
 <body>
-${presentation.slides.map(slide => `
-  <div id="${slide.name || slide.id}" class="page" style="background-color: ${slide.backgroundColor}; ${slide.backgroundImage ? `background-image: url('${slide.backgroundImage}');` : ''}">
-     <div class="content">
+ ${presentation.slides.map(slide => `
+ <section id="${slide.name?.replace(/\s+/g, '-').toLowerCase() || slide.id}" class="slide-section" style="background-color: ${slide.backgroundColor}; ${slide.backgroundImage ? `background-image: url('${slide.backgroundImage}');` : ''}">
+     <div class="content-wrapper">
         ${slide.elements.map(el => {
-            const style = `left: ${el.position.x}px; top: ${el.position.y}px; width: ${el.size.width}px; height: ${el.size.height}px; z-index: ${el.style.zIndex}; 
-                           font-size: ${el.style.fontSize}px; font-family: ${el.style.fontFamily}, sans-serif; color: ${el.style.color}; 
-                           background-color: ${el.style.backgroundColor || 'transparent'}; border-radius: ${el.style.borderRadius}px;
-                           opacity: ${el.style.opacity || 1}; text-align: ${el.style.textAlign || 'left'}; 
-                           justify-content: ${el.style.textAlign === 'center' ? 'center' : (el.style.textAlign === 'right' ? 'flex-end' : 'flex-start')};`;
-            
-            let contentHtml = '';
-            if(el.type === 'text') contentHtml = el.content;
-            if(el.type === 'image') contentHtml = `<img src="${el.content}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />`;
-            if(el.type === 'button') contentHtml = `<a href="${el.link || '#'}" style="text-decoration:none; color:inherit; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">${el.content}</a>`;
-            
-            return `<div class="element" style="${style}">${contentHtml}</div>`;
+             const left = (el.position.x / 960) * 100;
+             const top = (el.position.y / 540) * 100;
+             const width = (el.size.width / 960) * 100;
+             const height = (el.size.height / 540) * 100;
+             
+             let content = el.content;
+             if (el.type === 'button') {
+                 content = \`<a href="\${el.link || '#'}" class="w-full h-full flex items-center justify-center transition-transform hover:scale-105">\${el.content}</a>\`;
+             } else if (el.type === 'image') {
+                 content = \`<img src="\${el.content}" alt="" class="w-full h-full object-cover rounded-lg" />\`;
+             }
+             
+             return \`<div style="position: absolute; left: \${left}%; top: \${top}%; width: \${width}%; height: \${height}%; z-index: \${el.style.zIndex}; 
+                    font-size: clamp(1rem, 2vw, \${el.style.fontSize}px); font-family: \${el.style.fontFamily}, sans-serif; 
+                    color: \${el.style.color}; background-color: \${el.style.backgroundColor || 'transparent'}; 
+                    border-radius: \${el.style.borderRadius}px; opacity: \${el.style.opacity || 1};
+                    display: flex; align-items: \${el.type === 'button' ? 'center' : 'flex-start'}; justify-content: \${el.style.textAlign === 'center' || el.type === 'button' ? 'center' : (el.style.textAlign === 'right' ? 'flex-end' : 'flex-start')};
+                    \${el.style.boxShadow ? 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);' : ''}">
+                 \${content}
+             </div>\`;
         }).join('')}
      </div>
-  </div>
-`).join('')}
+ </section>
+ `).join('')}
 </body>
 </html>`;
 
-    const [copied, setCopied] = useState(false);
-
     const handleCopy = () => {
-        navigator.clipboard.writeText(html);
+        navigator.clipboard.writeText(code);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 className="text-xl font-bold flex items-center gap-2"><Code className="text-indigo-600" /> Export Code</h2>
-                    <div className="flex items-center gap-2">
-                         <button onClick={handleCopy} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
-                            {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copied' : 'Copy Code'}
-                         </button>
-                         <button onClick={onClose}><X size={24} className="text-gray-400" /></button>
-                    </div>
-                </div>
-                <div className="flex-1 overflow-hidden relative bg-gray-900 text-gray-300 font-mono text-sm">
-                    <textarea 
-                        className="w-full h-full bg-transparent p-4 outline-none resize-none"
-                        value={html}
-                        readOnly
-                    />
-                </div>
-            </div>
+             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                 <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
+                     <div className="flex items-center gap-2">
+                          <Code className="text-indigo-600" />
+                          <h2 className="font-bold text-gray-800">Export Website Code</h2>
+                     </div>
+                     <button onClick={onClose}><X size={20} className="text-gray-400 hover:text-gray-600" /></button>
+                 </div>
+                 <div className="flex-1 overflow-auto bg-gray-900 p-4">
+                     <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap">{code}</pre>
+                 </div>
+                 <div className="p-4 border-t border-gray-200 bg-white flex justify-end gap-3">
+                     <button onClick={onClose} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Close</button>
+                     <button onClick={handleCopy} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 flex items-center gap-2">
+                         {copied ? <Check size={18} /> : <Copy size={18} />} {copied ? 'Copied!' : 'Copy Code'}
+                     </button>
+                 </div>
+             </div>
         </div>
     );
 }

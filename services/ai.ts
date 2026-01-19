@@ -46,10 +46,12 @@ Design Rules:
 2. Fonts: Inter, Roboto, Playfair Display.
 3. Layout: Clean, professional, high contrast.
 4. Backgrounds: Use 'backgroundImagePrompt' for title slides, cover pages, or when the user requests specific imagery (e.g., "city skyline", "nature", "space"). For text-heavy slides, use solid 'backgroundColor'.
-5. Slide Count & Depth: 
-   - **User Specified**: If the user asks for a specific number (e.g., "10 slides"), YOU MUST generate exactly that many.
-   - **Auto-Detect**: If no number is specified, analyze the complexity of the prompt. Generate as many slides as necessary to cover the topic comprehensively. Do not arbitrarily limit to small numbers. If the input is a long article, create enough slides to summarize it effectively (e.g., 10-20 slides if needed).
-6. Long Input Handling: If the user provides a very long text, break it down logically into distinct slides. Summarize key points.
+5. Slide Count & Depth (CRITICAL): 
+   - **User Specified**: If the user asks for a specific number (e.g., "10 slides", "20 slides"), YOU MUST generate exactly that many. Do not deviate.
+   - **Auto-Detect**: If no number is specified, analyze the complexity and length of the prompt.
+     - Short prompt: 3-5 slides.
+     - Long prompt/Article: Generate as many slides as necessary to cover the content comprehensively (e.g., 10, 20, or 30 slides). Do not artificially summarize a long article into 5 slides. Break it down section by section.
+6. Long Input Handling: If the user provides a very long text, process the WHOLE text. Create a title slide, then section slides, then detail slides.
 7. Speed: Be concise. Do not explain. Just generate.
 `;
 
@@ -116,7 +118,8 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
         config: {
           systemInstruction: SYSTEM_PROMPT,
           responseMimeType: "application/json",
-          responseSchema: schema
+          responseSchema: schema,
+          maxOutputTokens: 8192 // Increased to prevent JSON truncation on large slide decks
         }
       });
 
@@ -130,6 +133,10 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
       return JSON.parse(response.text);
   } catch (e: any) {
       console.error("Gemini Error:", e);
+      // Attempt to salvage truncated JSON if possible, or just fail with clearer message
+      if (e.message.includes("JSON")) {
+          throw new Error("The content was too long and the response was cut off. Try asking for fewer slides or breaking your request into parts.");
+      }
       throw new Error(e.message || "Failed to generate content");
   }
 }
@@ -181,7 +188,8 @@ async function generateOpenAICompatible(
             { role: "system", content: SYSTEM_PROMPT + "\n\nIMPORTANT: Return ONLY valid, minified JSON. Do not include markdown formatting like ```json." },
             { role: "user", content: prompt }
           ],
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          max_tokens: 8192 // Increased for compatibility
         })
       });
 
