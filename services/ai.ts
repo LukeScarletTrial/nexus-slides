@@ -58,6 +58,14 @@ Design Rules:
 8. Speed: Be concise in the JSON structure.
 `;
 
+// --- Safety Settings ---
+const SAFETY_SETTINGS = [
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }
+];
+
 // --- Gemini Implementation ---
 const getGeminiClient = (apiKey: string) => new GoogleGenAI({ apiKey });
 
@@ -121,7 +129,8 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
           systemInstruction: SYSTEM_PROMPT,
           responseMimeType: "application/json",
           responseSchema: schema,
-          maxOutputTokens: 8192
+          maxOutputTokens: 8192,
+          safetySettings: SAFETY_SETTINGS,
         }
       });
 
@@ -146,10 +155,14 @@ async function generateGeminiImage(prompt: string, apiKey: string): Promise<stri
     if (!apiKey) return null;
     try {
         const ai = getGeminiClient(apiKey);
+        // Simplified content structure to avoid 'INVALID_ARGUMENT'
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: prompt, 
-            config: { imageConfig: { aspectRatio: "16:9" } }, 
+            config: { 
+                imageConfig: { aspectRatio: "16:9" },
+                safetySettings: SAFETY_SETTINGS,
+            }, 
         });
         
         if (!response.candidates?.[0]?.content?.parts && response.candidates?.[0]?.finishReason) {
@@ -181,7 +194,8 @@ export async function findImageOnWeb(query: string, apiKey: string): Promise<str
             3. The URL should ideally end in .jpg, .png, or .webp.
             4. Choose high-quality, relevant images from sources like Wikimedia, Unsplash, or public CDNs.`,
             config: {
-                tools: [{ googleSearch: {} }]
+                tools: [{ googleSearch: {} }],
+                safetySettings: SAFETY_SETTINGS
             }
         });
 
