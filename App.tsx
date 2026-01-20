@@ -26,6 +26,8 @@ import { motion, AnimatePresence, Variants } from 'framer-motion';
 // Helper to create IDs
 const uid = () => Math.random().toString(36).substr(2, 9);
 
+const DEFAULT_GEMINI_KEY = "AIzaSyBxO9eISqZmjes5XSgIb0l1VFSCCFNK2S8";
+
 // --- Animation Variants ---
 const variants: Record<string, Variants> = {
   fade: {
@@ -41,7 +43,7 @@ const variants: Record<string, Variants> = {
   cover: {
     initial: { y: '100%' },
     animate: { y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
-    exit: { opacity: 0, transition: { duration: 0.3 } } // Previous slide just fades out
+    exit: { opacity: 0, transition: { duration: 0.3 } } 
   },
   zoom: {
     initial: { scale: 0.5, opacity: 0 },
@@ -606,6 +608,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   useEffect(() => {
      const cached = localStorage.getItem(`key_${selectedProvider}`);
      if(cached) setProviderKey(cached);
+     else setProviderKey('');
      if(AVAILABLE_MODELS[selectedProvider]) {
          setSelectedModel(AVAILABLE_MODELS[selectedProvider][0].id);
      }
@@ -1007,9 +1010,11 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
     setAiLoading(true);
 
     try {
+        const apiKeyToUse = selectedProvider === 'gemini' ? DEFAULT_GEMINI_KEY : providerKey;
+
         const config: AIConfig = {
             provider: selectedProvider,
-            apiKey: providerKey,
+            apiKey: apiKeyToUse,
             model: selectedModel
         };
 
@@ -1615,13 +1620,19 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">API Key</label>
-                                    <input 
-                                        type="password"
-                                        value={providerKey}
-                                        onChange={(e) => saveKey(e.target.value)}
-                                        placeholder={`Enter ${selectedProvider} API Key`}
-                                        className="w-full text-sm border border-gray-300 rounded p-2"
-                                    />
+                                    {selectedProvider === 'gemini' ? (
+                                        <div className="w-full text-sm border border-gray-300 rounded p-2 bg-gray-100 text-gray-500 italic select-none">
+                                            Using default Nexus key (Free)
+                                        </div>
+                                    ) : (
+                                        <input 
+                                            type="password"
+                                            value={providerKey}
+                                            onChange={(e) => saveKey(e.target.value)}
+                                            placeholder={`Enter ${selectedProvider} API Key`}
+                                            className="w-full text-sm border border-gray-300 rounded p-2"
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1710,182 +1721,213 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
 
 function SidebarTool({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) {
   return (
-      <button 
-        onClick={onClick}
-        className={`w-full flex flex-col items-center gap-1 p-2 transition-colors relative ${isActive ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-      >
-        {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-600 rounded-r" />}
-        <div className="p-1">{icon}</div>
-        <span className="text-[10px] font-medium">{label}</span>
-      </button>
+    <button
+      onClick={onClick}
+      className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${
+        isActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+      }`}
+    >
+      <div className="w-6 h-6 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">{icon}</div>
+      <span className="text-[10px] font-medium">{label}</span>
+    </button>
   );
 }
 
 function ShapeButton({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) {
   return (
-      <button 
-        onClick={onClick}
-        className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all gap-2 aspect-square"
-      >
-        {icon}
-        <span className="text-xs">{label}</span>
-      </button>
+    <button 
+      onClick={onClick}
+      className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all text-gray-600 hover:text-indigo-600 gap-2 aspect-square"
+    >
+      {icon}
+      <span className="text-xs">{label}</span>
+    </button>
   );
 }
 
-function PresentationPlayer({ presentation, onExit, autoPlay = false, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
-    const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
-
-    useEffect(() => {
-        const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+function PresentationPlayer({ presentation, onExit, autoPlay, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [scale, setScale] = useState(1);
     
     useEffect(() => {
-        if (autoPlay) {
-            const timer = setTimeout(() => {
-                if (currentSlideIndex < presentation.slides.length - 1) {
-                    setCurrentSlideIndex(prev => prev + 1);
-                } else {
-                    if (onComplete) onComplete();
-                }
-            }, (presentation.slides[currentSlideIndex].duration || 3) * 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [autoPlay, currentSlideIndex, presentation.slides, onComplete]);
+        const handleResize = () => {
+            const s = Math.min(window.innerWidth / 960, window.innerHeight / 540);
+            setScale(s);
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onExit();
             if (e.key === 'ArrowRight' || e.key === ' ') {
-                setCurrentSlideIndex(prev => Math.min(prev + 1, presentation.slides.length - 1));
-            }
-            if (e.key === 'ArrowLeft') {
-                setCurrentSlideIndex(prev => Math.max(prev - 1, 0));
+                if (currentIndex < presentation.slides.length - 1) setCurrentIndex(c => c + 1);
+            } else if (e.key === 'ArrowLeft') {
+                if (currentIndex > 0) setCurrentIndex(c => c - 1);
+            } else if (e.key === 'Escape') {
+                onExit();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [presentation.slides.length, onExit]);
+    }, [currentIndex]);
 
-    const currentSlide = presentation.slides[currentSlideIndex];
-    // Calculate scale to fit 960x540 into window
-    const scale = Math.min(windowSize.width / 960, windowSize.height / 540);
+    // Autoplay logic for video export
+    useEffect(() => {
+        if (autoPlay) {
+            const duration = (presentation.slides[currentIndex].duration || 3) * 1000;
+            const timer = setTimeout(() => {
+                if (currentIndex < presentation.slides.length - 1) {
+                    setCurrentIndex(c => c + 1);
+                } else {
+                    onComplete?.();
+                }
+            }, duration);
+            return () => clearTimeout(timer);
+        }
+    }, [autoPlay, currentIndex]);
+
+    const currentSlide = presentation.slides[currentIndex];
 
     return (
         <div className="fixed inset-0 bg-black z-50 flex items-center justify-center overflow-hidden">
-           {/* Render Slide */}
-           <div className="relative" style={{ width: 960 * scale, height: 540 * scale }}>
-               <AnimatePresence mode="wait">
-                   <motion.div
-                      key={currentSlide.id}
-                      variants={getSlideTransition(currentSlide.transition)}
-                      initial="initial"
-                      animate="animate"
-                      exit="exit"
-                      className="absolute inset-0"
-                   >
-                      <SlideEditor 
-                          slide={currentSlide} 
-                          selectedElementId={null} 
-                          onElementUpdate={() => {}} 
-                          onElementSelect={() => {}} 
-                          scale={scale}
-                          mode="view"
-                          onNavigate={(link) => {
-                             const targetIndex = presentation.slides.findIndex(s => s.name === link || s.id === link);
-                             if (targetIndex !== -1) setCurrentSlideIndex(targetIndex);
-                          }}
-                      />
-                   </motion.div>
-               </AnimatePresence>
-           </div>
+            <div 
+                style={{ 
+                    width: 960, 
+                    height: 540, 
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'center'
+                }}
+            >
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={currentSlide.id}
+                        variants={getSlideTransition(currentSlide.transition)}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="w-full h-full relative"
+                    >
+                         <SlideEditor 
+                            slide={currentSlide} 
+                            selectedElementId={null} 
+                            onElementUpdate={() => {}} 
+                            onElementSelect={() => {}} 
+                            scale={1}
+                            mode="view"
+                            onNavigate={(link) => {
+                                // Basic navigation handling
+                                if (link.startsWith('http')) {
+                                    window.open(link, '_blank');
+                                } else {
+                                    // Try to find page by name or index
+                                    const idx = presentation.slides.findIndex(s => s.name === link);
+                                    if(idx !== -1) setCurrentIndex(idx);
+                                }
+                            }}
+                        />
+                    </motion.div>
+                </AnimatePresence>
+            </div>
 
-           {/* Controls */}
-           {!autoPlay && (
-               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4 items-center bg-white/10 backdrop-blur-md px-6 py-3 rounded-full text-white transition-opacity hover:bg-white/20">
-                   <button onClick={() => setCurrentSlideIndex(prev => Math.max(0, prev - 1))} className="hover:text-indigo-400 disabled:opacity-30" disabled={currentSlideIndex === 0}><ChevronLeft /></button>
-                   <span className="text-sm font-medium select-none">{currentSlideIndex + 1} / {presentation.slides.length}</span>
-                   <button onClick={() => setCurrentSlideIndex(prev => Math.min(presentation.slides.length - 1, prev + 1))} className="hover:text-indigo-400 disabled:opacity-30" disabled={currentSlideIndex === presentation.slides.length - 1}><ChevronRight /></button>
-                   <div className="w-px h-4 bg-white/20 mx-2"></div>
-                   <button onClick={onExit} className="hover:text-red-400"><X size={20} /></button>
-               </div>
-           )}
+            {/* Controls (Hidden during export) */}
+            {!autoPlay && (
+                <>
+                    <button 
+                        onClick={onExit}
+                        className="absolute top-4 right-4 text-white/50 hover:text-white bg-black/50 p-2 rounded-full backdrop-blur-sm transition-colors z-50"
+                    >
+                        <X size={24} />
+                    </button>
+                    
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-sm px-6 py-2 rounded-full text-white z-50">
+                        <button 
+                            onClick={() => setCurrentIndex(c => Math.max(0, c - 1))}
+                            disabled={currentIndex === 0}
+                            className="hover:text-indigo-400 disabled:opacity-30 transition-colors"
+                        >
+                            <ChevronLeft size={24} />
+                        </button>
+                        <span className="font-mono text-sm">{currentIndex + 1} / {presentation.slides.length}</span>
+                        <button 
+                            onClick={() => setCurrentIndex(c => Math.min(presentation.slides.length - 1, c + 1))}
+                            disabled={currentIndex === presentation.slides.length - 1}
+                            className="hover:text-indigo-400 disabled:opacity-30 transition-colors"
+                        >
+                            <ChevronRight size={24} />
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
     );
 }
 
 function CodeExportModal({ presentation, onClose }: { presentation: Presentation, onClose: () => void }) {
     const [copied, setCopied] = useState(false);
-    
-    const code = `<!DOCTYPE html>
-<html lang="en">
-<head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>${presentation.title}</title>
- <script src="https://cdn.tailwindcss.com"></script>
- <style>
-    body { margin: 0; overflow-x: hidden; scroll-behavior: smooth; }
-    .slide-section {
-       position: relative;
-       width: 100vw;
-       min-height: 100vh;
-       overflow: hidden;
-       background-size: cover;
-       background-position: center;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-    }
-    .content-wrapper {
-        position: relative;
-        width: 100%;
-        max-width: 1200px;
-        aspect-ratio: 16/9;
-    }
-    @media (max-width: 768px) {
-        .content-wrapper {
-            height: 100vh;
-            width: auto;
-            aspect-ratio: auto;
-        }
-    }
- </style>
-</head>
-<body>
- ${presentation.slides.map(slide => `
- <section id="${slide.name?.replace(/\s+/g, '-').toLowerCase() || slide.id}" class="slide-section" style="background-color: ${slide.backgroundColor}; ${slide.backgroundImage ? `background-image: url('${slide.backgroundImage}');` : ''}">
-     <div class="content-wrapper">
-        ${slide.elements.map(el => {
-             const left = (el.position.x / 960) * 100;
-             const top = (el.position.y / 540) * 100;
-             const width = (el.size.width / 960) * 100;
-             const height = (el.size.height / 540) * 100;
-             
-             let content = el.content;
-             if (el.type === 'button') {
-                 content = \`<a href="\${el.link || '#'}" class="w-full h-full flex items-center justify-center transition-transform hover:scale-105">\${el.content}</a>\`;
-             } else if (el.type === 'image') {
-                 content = \`<img src="\${el.content}" alt="" class="w-full h-full object-cover rounded-lg" />\`;
-             }
-             
-             return \`<div style="position: absolute; left: \${left}%; top: \${top}%; width: \${width}%; height: \${height}%; z-index: \${el.style.zIndex}; 
-                    font-size: clamp(1rem, 2vw, \${el.style.fontSize}px); font-family: \${el.style.fontFamily}, sans-serif; 
-                    color: \${el.style.color}; background-color: \${el.style.backgroundColor || 'transparent'}; 
-                    border-radius: \${el.style.borderRadius}px; opacity: \${el.style.opacity || 1};
-                    display: flex; align-items: \${el.type === 'button' ? 'center' : 'flex-start'}; justify-content: \${el.style.textAlign === 'center' || el.type === 'button' ? 'center' : (el.style.textAlign === 'right' ? 'flex-end' : 'flex-start')};
-                    \${el.style.boxShadow ? 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);' : ''}">
-                 \${content}
-             </div>\`;
-        }).join('')}
-     </div>
- </section>
- `).join('')}
-</body>
-</html>`;
+
+    // Generate a simple React component code
+    const generateReactCode = () => {
+        return `
+import React from 'react';
+
+const presentation = ${JSON.stringify(presentation, null, 2)};
+
+export default function Website() {
+  return (
+    <div style={{ width: '100%', minHeight: '100vh', background: '#f0f0f0' }}>
+      {presentation.slides.map(slide => (
+        <section 
+          key={slide.id} 
+          style={{ 
+            position: 'relative', 
+            width: '100%', 
+            maxWidth: '960px', 
+            margin: '0 auto', 
+            aspectRatio: '16/9',
+            backgroundColor: slide.backgroundColor,
+            backgroundImage: slide.backgroundImage ? \`url(\${slide.backgroundImage})\` : undefined,
+            backgroundSize: 'cover',
+            overflow: 'hidden',
+            marginBottom: '20px'
+          }}
+        >
+          {slide.elements.map(el => (
+             <div
+               key={el.id}
+               style={{
+                 position: 'absolute',
+                 left: \`\${(el.position.x / 960) * 100}%\`,
+                 top: \`\${(el.position.y / 540) * 100}%\`,
+                 width: \`\${(el.size.width / 960) * 100}%\`,
+                 height: \`\${(el.size.height / 540) * 100}%\`,
+                 zIndex: el.style.zIndex,
+                 color: el.style.color,
+                 fontSize: el.style.fontSize, // You might need responsive font sizing
+                 fontFamily: el.style.fontFamily,
+                 textAlign: el.style.textAlign,
+                 backgroundColor: el.style.backgroundColor,
+                 borderRadius: el.style.borderRadius,
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: el.style.textAlign === 'center' ? 'center' : (el.style.textAlign === 'right' ? 'flex-end' : 'flex-start'),
+                 pointerEvents: el.type === 'button' ? 'auto' : 'none'
+               }}
+             >
+                {el.type === 'image' && <img src={el.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                {(el.type === 'text' || el.type === 'button') && el.content}
+             </div>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+        `.trim();
+    };
+
+    const code = generateReactCode();
 
     const handleCopy = () => {
         navigator.clipboard.writeText(code);
@@ -1895,24 +1937,26 @@ function CodeExportModal({ presentation, onClose }: { presentation: Presentation
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                 <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
-                     <div className="flex items-center gap-2">
-                          <Code className="text-indigo-600" />
-                          <h2 className="font-bold text-gray-800">Export Website Code</h2>
-                     </div>
-                     <button onClick={onClose}><X size={20} className="text-gray-400 hover:text-gray-600" /></button>
-                 </div>
-                 <div className="flex-1 overflow-auto bg-gray-900 p-4">
-                     <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap">{code}</pre>
-                 </div>
-                 <div className="p-4 border-t border-gray-200 bg-white flex justify-end gap-3">
-                     <button onClick={onClose} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Close</button>
-                     <button onClick={handleCopy} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 flex items-center gap-2">
-                         {copied ? <Check size={18} /> : <Copy size={18} />} {copied ? 'Copied!' : 'Copy Code'}
-                     </button>
-                 </div>
-             </div>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><Code size={20} className="text-indigo-600"/> React Export</h3>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={handleCopy}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors text-sm"
+                        >
+                            {copied ? <Check size={16} /> : <Copy size={16} />}
+                            {copied ? 'Copied!' : 'Copy Code'}
+                        </button>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500"><X size={20} /></button>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-auto bg-[#1e1e1e] p-4">
+                    <pre className="text-gray-300 font-mono text-sm">
+                        <code>{code}</code>
+                    </pre>
+                </div>
+            </div>
         </div>
     );
 }

@@ -24,7 +24,7 @@ Response Schema (Strict JSON):
       "elements": [
         {
           "type": "text" | "image" | "shape" | "button",
-          "content": "string",
+          "content": "string (For images: provide a detailed image generation prompt. For text: can be very long)",
           "link": "string (Optional)",
           "x": number,
           "y": number,
@@ -51,8 +51,15 @@ Design Rules:
    - **Auto-Detect**: If no number is specified, analyze the complexity and length of the prompt.
      - Short prompt: 3-5 slides.
      - Long prompt/Article: Generate as many slides as necessary to cover the content comprehensively (e.g., 10, 20, or 30 slides). Do not artificially summarize a long article into 5 slides. Break it down section by section.
-6. Long Input Handling: If the user provides a very long text, process the WHOLE text. Create a title slide, then section slides, then detail slides.
-7. Speed: Be concise. Do not explain. Just generate.
+6. Content Density (IMPORTANT):
+   - **Text Amount**: You are ENABLED and ENCOURAGED to write very much text on a single slide if the user provides a lot of information or asks for detail. Do not summarize unnecessarily.
+   - If a slide has a lot of text, use a smaller fontSize (e.g., 12, 14, or 16) and ensure the text box dimensions (width/height) are large enough to contain it.
+   - Do not cut off information.
+7. Visuals & Images:
+   - **Image Generation**: You have a built-in image generator. ACTIVELY use elements with type="image".
+   - When using type="image", the 'content' field MUST be a highly descriptive prompt for the image generator (e.g., "A futuristic robot shaking hands with a human, neon lighting, 4k render").
+   - Suggest images to illustrate concepts, even if not explicitly asked.
+8. Speed: Be concise in the JSON structure, but verbose in the content if needed.
 `;
 
 // --- Gemini Implementation ---
@@ -76,13 +83,13 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
                      name: { type: Type.STRING },
                      backgroundColor: { type: Type.STRING },
                      backgroundImagePrompt: { type: Type.STRING },
-                     transition: { type: Type.STRING }, // removed enum to be safe
+                     transition: { type: Type.STRING },
                      elements: {
                          type: Type.ARRAY,
                          items: {
                              type: Type.OBJECT,
                              properties: {
-                                 type: { type: Type.STRING }, // removed enum
+                                 type: { type: Type.STRING },
                                  content: { type: Type.STRING },
                                  link: { type: Type.STRING },
                                  x: { type: Type.NUMBER },
@@ -119,7 +126,7 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
           systemInstruction: SYSTEM_PROMPT,
           responseMimeType: "application/json",
           responseSchema: schema,
-          maxOutputTokens: 8192 // Increased to prevent JSON truncation on large slide decks
+          maxOutputTokens: 8192
         }
       });
 
@@ -133,7 +140,6 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
       return JSON.parse(response.text);
   } catch (e: any) {
       console.error("Gemini Error:", e);
-      // Attempt to salvage truncated JSON if possible, or just fail with clearer message
       if (e.message.includes("JSON")) {
           throw new Error("The content was too long and the response was cut off. Try asking for fewer slides or breaking your request into parts.");
       }
@@ -151,7 +157,6 @@ async function generateGeminiImage(prompt: string, apiKey: string): Promise<stri
             config: { imageConfig: { aspectRatio: "16:9" } }, 
         });
         
-        // Handle finish reason for images too
         if (!response.candidates?.[0]?.content?.parts && response.candidates?.[0]?.finishReason) {
              console.warn(`Image generation blocked: ${response.candidates[0].finishReason}`);
              return null;
@@ -189,7 +194,7 @@ async function generateOpenAICompatible(
             { role: "user", content: prompt }
           ],
           response_format: { type: "json_object" },
-          max_tokens: 8192 // Increased for compatibility
+          max_tokens: 8192
         })
       });
 
@@ -201,7 +206,6 @@ async function generateOpenAICompatible(
       const data = await response.json();
       let content = data.choices[0].message.content;
       
-      // Sanitize Markdown code blocks if present
       content = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
       
       return JSON.parse(content);
@@ -246,8 +250,6 @@ export async function generateSlideContent(topic: string, config: AIConfig): Pro
     if (!key && config.provider !== 'gemini') {
         throw new Error(`API Key required for ${config.provider}`);
     }
-    // Gemini might have a key injected internally if not provided, but mostly needs it.
-    // If empty key and we try to use it, the SDK will throw. 
 
     switch (config.provider) {
         case 'gemini':
@@ -255,10 +257,8 @@ export async function generateSlideContent(topic: string, config: AIConfig): Pro
         case 'openai':
             return generateOpenAICompatible(topic, config.apiKey, 'https://api.openai.com/v1', config.model || 'gpt-4o');
         case 'grok':
-             // Grok (xAI)
             return generateOpenAICompatible(topic, config.apiKey, 'https://api.x.ai/v1', config.model || 'grok-beta');
         case 'deepseek':
-             // DeepSeek 
             return generateOpenAICompatible(topic, config.apiKey, 'https://api.deepseek.com', config.model || 'deepseek-chat');
         default:
             throw new Error("Unknown provider");

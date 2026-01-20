@@ -19,6 +19,26 @@ export interface User {
   photoURL: string | null;
 }
 
+export interface ElementStyle {
+  backgroundColor?: string;
+  background?: string; // For gradients
+  color?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: string;
+  borderRadius?: number;
+  opacity?: number;
+  zIndex: number;
+  border?: string; // Legacy simple border
+  borderColor?: string;
+  borderWidth?: number;
+  borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none';
+  boxShadow?: boolean;
+  lineHeight?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  padding?: string;
+}
+
 export interface SlideElement {
   id: string;
   type: ElementType;
@@ -27,25 +47,7 @@ export interface SlideElement {
   link?: string; // URL or Slide ID for navigation
   position: Position;
   size: Size;
-  style: {
-    backgroundColor?: string;
-    background?: string; // For gradients
-    color?: string;
-    fontSize?: number;
-    fontFamily?: string;
-    fontWeight?: string;
-    borderRadius?: number;
-    opacity?: number;
-    zIndex: number;
-    border?: string; // Legacy simple border
-    borderColor?: string;
-    borderWidth?: number;
-    borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none';
-    boxShadow?: boolean;
-    lineHeight?: string;
-    textAlign?: 'left' | 'center' | 'right';
-    padding?: string;
-  };
+  style: ElementStyle;
   animation?: {
     type: 'fade' | 'slide' | 'scale' | 'none';
     duration: number;
