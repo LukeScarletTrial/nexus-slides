@@ -26,25 +26,14 @@ import { motion, AnimatePresence, Variants } from 'framer-motion';
 // Helper to create IDs
 const uid = () => Math.random().toString(36).substr(2, 9);
 
-// Obfuscated keys to prevent automated scanning detection
-// Split into parts to avoid contiguous string matching
+// Get Gemini Key from Environment Variable
+const getGeminiKey = () => {
+  return process.env.API_KEY || "";
+};
 
-// Gemini Key
-const _kPart1 = "QUl6YVN5QnhPOWVJU3FabWpl";
-const _kPart2 = "czVYU2dJYjBsMVZGU0NDRk5LMlM4";
-
-// Pollinations Key
+// Pollinations Key (Obfuscated)
 const _pPart1 = "c2tfMDZuT2tjWWMzb1k2cWtkZmVta0ZlZg==";
 const _pPart2 = "NzlWUUVSMjZqWA==";
-
-const getGeminiKey = () => {
-  try {
-    return atob(_kPart1 + _kPart2);
-  } catch (e) {
-    console.error("Failed to decode Gemini key");
-    return "";
-  }
-};
 
 const getPollinationsKey = () => {
   try {
@@ -54,6 +43,17 @@ const getPollinationsKey = () => {
     return "";
   }
 };
+
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // Animated SVG Placeholder for loading images
 const LOADING_PLACEHOLDER = `data:image/svg+xml;base64,${btoa(`
@@ -69,17 +69,6 @@ const LOADING_PLACEHOLDER = `data:image/svg+xml;base64,${btoa(`
   <text x="50" y="55" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6366f1">Creating...</text>
 </svg>
 `)}`;
-
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // --- Animation Variants ---
 const variants: Record<string, Variants> = {
@@ -270,8 +259,6 @@ export default function App() {
     </>
   );
 }
-
-// ... (AuthModal, BugReportModal, Dashboard components remain unchanged, omitting for brevity to focus on Editor logic)
 
 function BugReportModal({ user, onClose, onUpdateUser }: { user: User, onClose: () => void, onUpdateUser: (u: User) => void }) {
     const [desc, setDesc] = useState('');
