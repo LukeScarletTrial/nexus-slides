@@ -1039,9 +1039,15 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                 const newBgColor = slideData.backgroundColor || '#ffffff';
 
                 // Parallel Background Gen
-                const bgPromise = slideData.backgroundImagePrompt
-                   ? generateImage(slideData.backgroundImagePrompt, config)
-                   : Promise.resolve(undefined);
+                let bgImage: string | undefined = undefined;
+                if (slideData.backgroundImagePrompt) {
+                    try {
+                        const img = await generateImage(slideData.backgroundImagePrompt, config);
+                        if (img) bgImage = img;
+                    } catch(e) {
+                        console.warn("Background image gen failed", e);
+                    }
+                }
 
                 // Parallel Element Gen
                 const elementPromises = (slideData.elements || []).map(async (elData: any) => {
@@ -1049,9 +1055,16 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                     if (elData.type === 'image') {
                         try {
                             const generatedImageUrl = await generateImage(content, config);
-                            if (generatedImageUrl) content = generatedImageUrl;
+                            if (generatedImageUrl) {
+                                content = generatedImageUrl;
+                            } else {
+                                // FALLBACK IF AI FAILS
+                                console.warn("AI Image generation returned null, using fallback.");
+                                content = `https://placehold.co/600x400?text=AI+Gen+Failed`; 
+                            }
                         } catch (e) {
                             console.error("Image generation failed", e);
+                            content = `https://placehold.co/600x400?text=Error`;
                         }
                     }
 
@@ -1081,10 +1094,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                     } as SlideElement;
                 });
 
-                const [bgImage, resolvedElements] = await Promise.all([
-                    bgPromise,
-                    Promise.all(elementPromises)
-                ]);
+                const resolvedElements = await Promise.all(elementPromises);
 
                 // Fix Z-Index
                 const finalElements = resolvedElements.map((el: SlideElement, index: number) => ({
@@ -1096,7 +1106,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                     id: uid(),
                     name: slideData.name || `AI Page`,
                     backgroundColor: newBgColor,
-                    backgroundImage: bgImage || undefined,
+                    backgroundImage: bgImage,
                     duration: 3,
                     transition: (slideData.transition || 'fade').toLowerCase(), // Sanitize
                     elements: finalElements
@@ -1719,242 +1729,168 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   );
 }
 
-function SidebarTool({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${
-        isActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-      }`}
-    >
-      <div className="w-6 h-6 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">{icon}</div>
-      <span className="text-[10px] font-medium">{label}</span>
-    </button>
-  );
-}
-
-function ShapeButton({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) {
-  return (
-    <button 
-      onClick={onClick}
-      className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all text-gray-600 hover:text-indigo-600 gap-2 aspect-square"
-    >
-      {icon}
-      <span className="text-xs">{label}</span>
-    </button>
-  );
-}
-
 function PresentationPlayer({ presentation, onExit, autoPlay, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [scale, setScale] = useState(1);
-    
-    useEffect(() => {
-        const handleResize = () => {
-            const s = Math.min(window.innerWidth / 960, window.innerHeight / 540);
-            setScale(s);
-        };
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  
+  useEffect(() => {
+      if (!autoPlay) return;
+      const slide = presentation.slides[currentIndex];
+      const timer = setTimeout(() => {
+          if (currentIndex < presentation.slides.length - 1) {
+              setCurrentIndex(prev => prev + 1);
+          } else {
+              onComplete?.();
+          }
+      }, slide.duration * 1000);
+      return () => clearTimeout(timer);
+  }, [currentIndex, autoPlay, presentation.slides, onComplete]);
 
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowRight' || e.key === ' ') {
-                if (currentIndex < presentation.slides.length - 1) setCurrentIndex(c => c + 1);
-            } else if (e.key === 'ArrowLeft') {
-                if (currentIndex > 0) setCurrentIndex(c => c - 1);
-            } else if (e.key === 'Escape') {
-                onExit();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [currentIndex]);
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'ArrowRight' || e.key === ' ') {
+              setCurrentIndex(prev => Math.min(prev + 1, presentation.slides.length - 1));
+          } else if (e.key === 'ArrowLeft') {
+              setCurrentIndex(prev => Math.max(prev - 1, 0));
+          } else if (e.key === 'Escape') {
+              onExit();
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [presentation.slides.length, onExit]);
 
-    // Autoplay logic for video export
-    useEffect(() => {
-        if (autoPlay) {
-            const duration = (presentation.slides[currentIndex].duration || 3) * 1000;
-            const timer = setTimeout(() => {
-                if (currentIndex < presentation.slides.length - 1) {
-                    setCurrentIndex(c => c + 1);
-                } else {
-                    onComplete?.();
-                }
-            }, duration);
-            return () => clearTimeout(timer);
-        }
-    }, [autoPlay, currentIndex]);
+  const currentSlide = presentation.slides[currentIndex];
 
-    const currentSlide = presentation.slides[currentIndex];
+  // Calculate scale to fit screen
+  const [windowSize, setWindowSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+      const handleResize = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-    return (
-        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center overflow-hidden">
-            <div 
-                style={{ 
-                    width: 960, 
-                    height: 540, 
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'center'
-                }}
-            >
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={currentSlide.id}
-                        variants={getSlideTransition(currentSlide.transition)}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        className="w-full h-full relative"
-                    >
-                         <SlideEditor 
-                            slide={currentSlide} 
-                            selectedElementId={null} 
-                            onElementUpdate={() => {}} 
-                            onElementSelect={() => {}} 
-                            scale={1}
-                            mode="view"
-                            onNavigate={(link) => {
-                                // Basic navigation handling
-                                if (link.startsWith('http')) {
-                                    window.open(link, '_blank');
-                                } else {
-                                    // Try to find page by name or index
-                                    const idx = presentation.slides.findIndex(s => s.name === link);
-                                    if(idx !== -1) setCurrentIndex(idx);
-                                }
-                            }}
-                        />
-                    </motion.div>
-                </AnimatePresence>
-            </div>
+  const scale = Math.min(windowSize.w / 960, windowSize.h / 540);
 
-            {/* Controls (Hidden during export) */}
-            {!autoPlay && (
-                <>
-                    <button 
-                        onClick={onExit}
-                        className="absolute top-4 right-4 text-white/50 hover:text-white bg-black/50 p-2 rounded-full backdrop-blur-sm transition-colors z-50"
-                    >
-                        <X size={24} />
-                    </button>
-                    
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-sm px-6 py-2 rounded-full text-white z-50">
-                        <button 
-                            onClick={() => setCurrentIndex(c => Math.max(0, c - 1))}
-                            disabled={currentIndex === 0}
-                            className="hover:text-indigo-400 disabled:opacity-30 transition-colors"
-                        >
-                            <ChevronLeft size={24} />
-                        </button>
-                        <span className="font-mono text-sm">{currentIndex + 1} / {presentation.slides.length}</span>
-                        <button 
-                            onClick={() => setCurrentIndex(c => Math.min(presentation.slides.length - 1, c + 1))}
-                            disabled={currentIndex === presentation.slides.length - 1}
-                            className="hover:text-indigo-400 disabled:opacity-30 transition-colors"
-                        >
-                            <ChevronRight size={24} />
-                        </button>
-                    </div>
-                </>
-            )}
-        </div>
-    );
+  return (
+      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center overflow-hidden">
+           <div className="relative" style={{ width: 960 * scale, height: 540 * scale }}>
+                <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: 960, height: 540 }}>
+                   <SlideEditor 
+                        slide={currentSlide} 
+                        selectedElementId={null} 
+                        onElementUpdate={() => {}} 
+                        onElementSelect={() => {}} 
+                        scale={1} 
+                        mode="view"
+                        onNavigate={(link) => {
+                             if (link.startsWith('http')) {
+                                 window.open(link, '_blank');
+                             } else {
+                                 const idx = presentation.slides.findIndex(s => s.name === link || s.id === link);
+                                 if (idx !== -1) setCurrentIndex(idx);
+                             }
+                        }}
+                    />
+                </div>
+           </div>
+
+           {/* Controls Overlay */}
+           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-gray-900/80 backdrop-blur text-white px-6 py-3 rounded-full opacity-0 hover:opacity-100 transition-opacity duration-300">
+               <button onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))} className="hover:text-indigo-400 disabled:opacity-30" disabled={currentIndex === 0}>
+                   <ChevronLeft size={24} />
+               </button>
+               <span className="font-medium font-mono">{currentIndex + 1} / {presentation.slides.length}</span>
+               <button onClick={() => setCurrentIndex(Math.min(presentation.slides.length - 1, currentIndex + 1))} className="hover:text-indigo-400 disabled:opacity-30" disabled={currentIndex === presentation.slides.length - 1}>
+                   <ChevronRight size={24} />
+               </button>
+               <div className="w-px h-6 bg-white/20"></div>
+               <button onClick={onExit} className="hover:text-red-400 text-sm font-bold uppercase tracking-wider">Exit</button>
+           </div>
+      </div>
+  );
 }
+
+const SidebarTool = ({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all w-14 sm:w-16 ${
+        isActive 
+          ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' 
+          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+    }`}
+  >
+    {React.cloneElement(icon as React.ReactElement, { size: 22, strokeWidth: isActive ? 2.5 : 2 })}
+    <span className="text-[10px] font-medium leading-none">{label}</span>
+  </button>
+);
+
+const ShapeButton = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => (
+  <button 
+    onClick={onClick}
+    className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-xl hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all text-gray-600 gap-2 hover:shadow-sm bg-gray-50/50"
+  >
+    {React.cloneElement(icon as React.ReactElement, { size: 24 })}
+    <span className="text-xs font-medium">{label}</span>
+  </button>
+);
 
 function CodeExportModal({ presentation, onClose }: { presentation: Presentation, onClose: () => void }) {
-    const [copied, setCopied] = useState(false);
+    const code = `
+import React, { useState } from 'react';
 
-    // Generate a simple React component code
-    const generateReactCode = () => {
-        return `
-import React from 'react';
+// --- Presentation Data ---
+const DATA = ${JSON.stringify(presentation, null, 2)};
 
-const presentation = ${JSON.stringify(presentation, null, 2)};
+export default function PresentationViewer() {
+  const [index, setIndex] = useState(0);
+  const slide = DATA.slides[index];
 
-export default function Website() {
   return (
-    <div style={{ width: '100%', minHeight: '100vh', background: '#f0f0f0' }}>
-      {presentation.slides.map(slide => (
-        <section 
-          key={slide.id} 
-          style={{ 
-            position: 'relative', 
-            width: '100%', 
-            maxWidth: '960px', 
-            margin: '0 auto', 
-            aspectRatio: '16/9',
-            backgroundColor: slide.backgroundColor,
-            backgroundImage: slide.backgroundImage ? \`url(\${slide.backgroundImage})\` : undefined,
-            backgroundSize: 'cover',
-            overflow: 'hidden',
-            marginBottom: '20px'
-          }}
-        >
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
+       <div style={{ position: 'relative', width: 960, height: 540, backgroundColor: slide.backgroundColor, overflow: 'hidden' }}>
           {slide.elements.map(el => (
-             <div
-               key={el.id}
-               style={{
-                 position: 'absolute',
-                 left: \`\${(el.position.x / 960) * 100}%\`,
-                 top: \`\${(el.position.y / 540) * 100}%\`,
-                 width: \`\${(el.size.width / 960) * 100}%\`,
-                 height: \`\${(el.size.height / 540) * 100}%\`,
-                 zIndex: el.style.zIndex,
-                 color: el.style.color,
-                 fontSize: el.style.fontSize, // You might need responsive font sizing
-                 fontFamily: el.style.fontFamily,
-                 textAlign: el.style.textAlign,
-                 backgroundColor: el.style.backgroundColor,
-                 borderRadius: el.style.borderRadius,
-                 display: 'flex',
-                 alignItems: 'center',
-                 justifyContent: el.style.textAlign === 'center' ? 'center' : (el.style.textAlign === 'right' ? 'flex-end' : 'flex-start'),
-                 pointerEvents: el.type === 'button' ? 'auto' : 'none'
-               }}
-             >
-                {el.type === 'image' && <img src={el.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                {(el.type === 'text' || el.type === 'button') && el.content}
+             <div key={el.id} style={{
+                position: 'absolute',
+                left: el.position.x, top: el.position.y,
+                width: el.size.width, height: el.size.height,
+                zIndex: el.style.zIndex,
+                ...el.style
+             }}>
+                {el.type === 'text' && el.content}
+                {el.type === 'image' && <img src={el.content} style={{width: '100%', height: '100%', objectFit: 'cover'}} />}
+                {el.type === 'button' && <button>{el.content}</button>}
              </div>
           ))}
-        </section>
-      ))}
+       </div>
+       <div style={{ position: 'fixed', bottom: 20, left: 0, right: 0, textAlign: 'center', color: 'white' }}>
+          <button onClick={() => setIndex(i => Math.max(0, i-1))}>Prev</button>
+          <span style={{ margin: '0 10px' }}>{index + 1} / {DATA.slides.length}</span>
+          <button onClick={() => setIndex(i => Math.min(DATA.slides.length-1, i+1))}>Next</button>
+       </div>
     </div>
   );
 }
-        `.trim();
-    };
-
-    const code = generateReactCode();
-
-    const handleCopy = () => {
-        navigator.clipboard.writeText(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
+`;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2"><Code size={20} className="text-indigo-600"/> React Export</h3>
-                    <div className="flex items-center gap-3">
-                        <button 
-                            onClick={handleCopy}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors text-sm"
-                        >
-                            {copied ? <Check size={16} /> : <Copy size={16} />}
-                            {copied ? 'Copied!' : 'Copy Code'}
-                        </button>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500"><X size={20} /></button>
-                    </div>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={20} className="text-gray-500" /></button>
                 </div>
-                <div className="flex-1 overflow-auto bg-[#1e1e1e] p-4">
-                    <pre className="text-gray-300 font-mono text-sm">
-                        <code>{code}</code>
-                    </pre>
+                <div className="flex-1 relative bg-gray-900 overflow-hidden group">
+                    <textarea 
+                        readOnly 
+                        className="w-full h-full p-6 font-mono text-sm bg-transparent text-gray-300 resize-none outline-none" 
+                        value={code}
+                    />
+                    <button 
+                        onClick={() => navigator.clipboard.writeText(code)}
+                        className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-md transition-all flex items-center gap-2 border border-white/10"
+                    >
+                        <Copy size={14} /> Copy Code
+                    </button>
                 </div>
             </div>
         </div>

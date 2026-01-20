@@ -24,7 +24,7 @@ Response Schema (Strict JSON):
       "elements": [
         {
           "type": "text" | "image" | "shape" | "button",
-          "content": "string (For images: provide a detailed image generation prompt. For text: can be very long)",
+          "content": "string (For images: provide a detailed image generation prompt)",
           "link": "string (Optional)",
           "x": number,
           "y": number,
@@ -46,20 +46,16 @@ Design Rules:
 2. Fonts: Inter, Roboto, Playfair Display.
 3. Layout: Clean, professional, high contrast.
 4. Backgrounds: Use 'backgroundImagePrompt' for title slides, cover pages, or when the user requests specific imagery (e.g., "city skyline", "nature", "space"). For text-heavy slides, use solid 'backgroundColor'.
-5. Slide Count & Depth (CRITICAL): 
-   - **User Specified**: If the user asks for a specific number (e.g., "10 slides", "20 slides"), YOU MUST generate exactly that many. Do not deviate.
-   - **Auto-Detect**: If no number is specified, analyze the complexity and length of the prompt.
-     - Short prompt: 3-5 slides.
-     - Long prompt/Article: Generate as many slides as necessary to cover the content comprehensively (e.g., 10, 20, or 30 slides). Do not artificially summarize a long article into 5 slides. Break it down section by section.
-6. Content Density (IMPORTANT):
-   - **Text Amount**: You are ENABLED and ENCOURAGED to write very much text on a single slide if the user provides a lot of information or asks for detail. Do not summarize unnecessarily.
-   - If a slide has a lot of text, use a smaller fontSize (e.g., 12, 14, or 16) and ensure the text box dimensions (width/height) are large enough to contain it.
-   - Do not cut off information.
-7. Visuals & Images:
-   - **Image Generation**: You have a built-in image generator. ACTIVELY use elements with type="image".
-   - When using type="image", the 'content' field MUST be a highly descriptive prompt for the image generator (e.g., "A futuristic robot shaking hands with a human, neon lighting, 4k render").
-   - Suggest images to illustrate concepts, even if not explicitly asked.
-8. Speed: Be concise in the JSON structure, but verbose in the content if needed.
+5. Slide Count & Depth: 
+   - **User Specified**: If the user asks for a specific number, generate exactly that many.
+   - **Auto-Detect**: If no number is specified, analyze complexity. Short: 3-5 slides. Long: 10+ slides.
+6. Content Density:
+   - **Text Amount**: Write detailed text if needed. Use smaller fontSize (12-16) for dense text.
+7. Visuals & Images (CRITICAL):
+   - **MANDATORY**: You MUST include 'image' elements frequently. At least 1 image per 2 slides, or more for visual topics.
+   - When using type="image", the 'content' MUST be a prompt (e.g., "High-tech server room, blue neon lights, 4k photorealistic").
+   - DO NOT use URLs. Only Prompts.
+8. Speed: Be concise in the JSON structure.
 `;
 
 // --- Gemini Implementation ---
@@ -70,7 +66,6 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
   
   const ai = getGeminiClient(apiKey);
   
-  // Relaxed Schema to avoid 400 Bad Request on strict enum mismatch
   const schema = {
      type: Type.OBJECT,
      properties: {
