@@ -148,7 +148,7 @@ async function generateGeminiImage(prompt: string, apiKey: string): Promise<stri
         const ai = getGeminiClient(apiKey);
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: prompt }] },
+            contents: prompt, 
             config: { imageConfig: { aspectRatio: "16:9" } }, 
         });
         
@@ -163,6 +163,52 @@ async function generateGeminiImage(prompt: string, apiKey: string): Promise<stri
         return null;
     } catch (e) {
         console.error("Gemini Image Gen Error", e);
+        return null;
+    }
+}
+
+// --- Web Search Image Fallback ---
+export async function findImageOnWeb(query: string, apiKey: string): Promise<string | null> {
+    if (!apiKey) return null;
+    try {
+        const ai = getGeminiClient(apiKey);
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Find a direct, publicly accessible image URL for: "${query}". 
+            Rules:
+            1. Return ONLY the raw URL string.
+            2. Do not include markdown or explanations.
+            3. The URL should ideally end in .jpg, .png, or .webp.
+            4. Choose high-quality, relevant images from sources like Wikimedia, Unsplash, or public CDNs.`,
+            config: {
+                tools: [{ googleSearch: {} }]
+            }
+        });
+
+        // 1. Try to extract from grounding metadata (most reliable for source links)
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks) {
+            for (const chunk of chunks) {
+                if (chunk.web?.uri) {
+                    // Check if URI looks like an image or we can use it
+                    const uri = chunk.web.uri;
+                    if (uri.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
+                        return uri;
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to extracting from text
+        const text = response.text?.trim();
+        if (text && text.startsWith('http')) {
+            // Basic cleanup if it included markdown
+            return text.replace(/`/g, '').split(/\s+/)[0]; 
+        }
+        
+        return null;
+    } catch (e) {
+        console.error("Web Image Search Error", e);
         return null;
     }
 }
