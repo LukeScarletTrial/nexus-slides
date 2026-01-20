@@ -4,7 +4,7 @@ import {
   MoreVertical, Plus, Trash2, Wand2, Download, Video, X,
   Circle, Triangle, Star, Box, Search, Upload, Hexagon, ArrowRight,
   Layout, LogOut, Crown, ChevronLeft, ChevronRight, CreditCard, Sparkles, Mail, Lock, User as UserIcon, Bug, Coins, ArrowRightLeft, Check,
-  Copy, Layers, ArrowUp, ArrowDown, Maximize, Droplets, AlignLeft, AlignCenter, AlignRight, Code, Globe, Link as LinkIcon, MousePointerClick, Settings, Key, Cpu, MessageSquare, Send, Zap, FileJson, FileType, FileVideo
+  Copy, Layers, ArrowUp, ArrowDown, Maximize, Droplets, AlignLeft, AlignCenter, AlignRight, Code, Globe, Link as LinkIcon, MousePointerClick, Settings, Key, Cpu, MessageSquare, Send, Zap, FileJson, FileType, FileVideo, AlertTriangle
 } from 'lucide-react';
 import { SlideEditor } from './components/SlideEditor';
 import { Slide, SlideElement, Presentation, ShapeType, User, TransitionType } from './types';
@@ -646,11 +646,17 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   const [providerKey, setProviderKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
   const [showSettings, setShowSettings] = useState(false);
+  const [keyError, setKeyError] = useState(false);
 
   useEffect(() => {
      const cached = localStorage.getItem(`key_${selectedProvider}`);
-     if(cached) setProviderKey(cached);
-     else setProviderKey('');
+     if(cached) {
+         setProviderKey(cached);
+         setKeyError(false);
+     } else {
+         setProviderKey('');
+     }
+     
      if(AVAILABLE_MODELS[selectedProvider]) {
          setSelectedModel(AVAILABLE_MODELS[selectedProvider][0].id);
      }
@@ -659,6 +665,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   const saveKey = (key: string) => {
       setProviderKey(key);
       localStorage.setItem(`key_${selectedProvider}`, key);
+      setKeyError(false);
   }
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1109,7 +1116,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
     setAiStatus("Structuring layout...");
 
     try {
-        const apiKeyToUse = selectedProvider === 'gemini' ? getGeminiKey() : providerKey;
+        const apiKeyToUse = selectedProvider === 'gemini' ? (providerKey || getGeminiKey()) : providerKey;
 
         const config: AIConfig = {
             provider: selectedProvider,
@@ -1251,7 +1258,15 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
         }
     } catch (e: any) {
       console.error(e);
-      setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${e.message || "Something went wrong."}` }]);
+      // SPECIFIC ERROR HANDLING FOR LEAKED KEYS
+      if (e.message.includes("leaked") || e.message.includes("API key") || e.message.includes("403")) {
+          setAiStatus("API Key Error");
+          setChatMessages(prev => [...prev, { role: 'assistant', content: "🚨 Error: Your API Key was revoked by Google because it was detected in a public message. \n\nPlease click the Settings gear icon above and enter a BRAND NEW API Key to continue." }]);
+          setKeyError(true);
+          setShowSettings(true); // Auto open settings
+      } else {
+          setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${e.message || "Something went wrong."}` }]);
+      }
       setAiLoading(false);
     }
   };
@@ -1713,8 +1728,9 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                             <h3 className="font-bold">Nexus AI</h3>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={() => setShowSettings(!showSettings)} className="p-1 hover:bg-white/20 rounded" title="AI Settings">
+                            <button onClick={() => setShowSettings(!showSettings)} className="p-1 hover:bg-white/20 rounded relative" title="AI Settings">
                                 <Settings size={18} />
+                                {keyError && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>}
                             </button>
                             <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-white/20 rounded">
                                 <X size={18} />
@@ -1752,10 +1768,21 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs text-gray-500 mb-1">API Key</label>
-                                    {selectedProvider === 'gemini' ? (
-                                        <div className="w-full text-sm border border-gray-300 rounded p-2 bg-gray-100 text-gray-500 italic select-none">
-                                            Using default Nexus key (Free)
+                                    <label className="block text-xs text-gray-500 mb-1">API Key {keyError && <span className="text-red-500 font-bold">(Update Required)</span>}</label>
+                                    {selectedProvider === 'gemini' && !providerKey ? (
+                                        <div className="space-y-2">
+                                            <div className="w-full text-sm border border-red-200 bg-red-50 text-red-600 rounded p-2 text-xs flex items-center gap-2">
+                                                <AlertTriangle size={14} /> Default key is invalid or leaked.
+                                            </div>
+                                            <input 
+                                                type="password"
+                                                value={providerKey}
+                                                onChange={(e) => saveKey(e.target.value)}
+                                                placeholder={`Paste NEW Gemini API Key here`}
+                                                className="w-full text-sm border border-indigo-300 ring-2 ring-indigo-100 rounded p-2"
+                                                autoFocus
+                                            />
+                                            <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-xs text-indigo-600 hover:underline block text-right">Get new key &rarr;</a>
                                         </div>
                                     ) : (
                                         <input 
@@ -1763,7 +1790,7 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                                             value={providerKey}
                                             onChange={(e) => saveKey(e.target.value)}
                                             placeholder={`Enter ${selectedProvider} API Key`}
-                                            className="w-full text-sm border border-gray-300 rounded p-2"
+                                            className={`w-full text-sm border rounded p-2 ${keyError ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
                                         />
                                     )}
                                 </div>

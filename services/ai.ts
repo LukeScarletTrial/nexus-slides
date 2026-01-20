@@ -144,10 +144,9 @@ async function generateGemini(prompt: string, apiKey: string, model: string) {
       return JSON.parse(response.text);
   } catch (e: any) {
       console.error("Gemini Error:", e);
-      if (e.message.includes("JSON")) {
-          throw new Error("The content was too long and the response was cut off. Try asking for fewer slides or breaking your request into parts.");
-      }
-      throw new Error(e.message || "Failed to generate content");
+      // Propagate the error fully so the UI can detect 'leaked' or '403'
+      if (e.message) throw e;
+      throw new Error("Failed to generate content");
   }
 }
 
