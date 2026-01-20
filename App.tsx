@@ -28,6 +28,17 @@ const uid = () => Math.random().toString(36).substr(2, 9);
 
 const DEFAULT_GEMINI_KEY = "AIzaSyBxO9eISqZmjes5XSgIb0l1VFSCCFNK2S8";
 
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 // --- Animation Variants ---
 const variants: Record<string, Variants> = {
   fade: {
@@ -640,12 +651,12 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
               "Finalizing slides..."
           ];
           let i = 0;
-          if (!aiStatus.includes("Rendering")) {
+          if (!aiStatus.includes("Rendering") && !aiStatus.includes("Cooling")) {
              setAiStatus(statuses[0]);
           }
           
           const interval = setInterval(() => {
-              if (!aiStatus.includes("Rendering")) {
+              if (!aiStatus.includes("Rendering") && !aiStatus.includes("Cooling")) {
                   i = (i + 1) % statuses.length;
                   setAiStatus(statuses[i]);
               }
@@ -1000,6 +1011,54 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
       }, 1000);
   };
 
+  const generateImageWithFallback = async (prompt: string, config: AIConfig, width: number, height: number): Promise<string> => {
+      // 1. Gemini
+      try {
+          const img = await generateImage(prompt, config);
+          if (img) return img;
+      } catch (e) { console.warn("Gemini Image Gen failed"); }
+
+      // 2. Web Search
+      try {
+          // Use default key if custom one isn't set, because search needs it
+          const keyToUse = config.apiKey || DEFAULT_GEMINI_KEY;
+          const webImg = await findImageOnWeb(prompt, keyToUse);
+          if (webImg) return webImg;
+      } catch (e) { console.warn("Web Search failed"); }
+
+      // 3. Pollinations with Rate Limiting / Cooldown
+      console.log("Falling back to Pollinations...");
+      const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true`;
+      
+      try {
+          // fetch the image to convert to base64, allowing us to control the rate
+          // Wait a bit to prevent burst (politeness delay)
+          await sleep(2000); 
+          
+          const res = await fetch(pollUrl);
+          if (!res.ok) throw new Error("Pollinations Error");
+          
+          const blob = await res.blob();
+          return await blobToBase64(blob);
+      } catch (e) {
+           console.warn("Pollinations Rate Limit hit? Waiting 60s...");
+           setAiStatus("Rate limit hit. Cooling down for 60s...");
+           await sleep(60000); // The requested 1 minute cooldown
+           
+           // Retry once
+           setAiStatus("Retrying image generation...");
+           try {
+               const res = await fetch(pollUrl);
+               const blob = await res.blob();
+               return await blobToBase64(blob);
+           } catch(retryError) {
+               console.error("Retry failed", retryError);
+               // Final Fallback: Return a placeholder solid color or transparent pixel to avoid crashing
+               return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+           }
+      }
+  };
+
   const handleChatSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!chatInput.trim() || aiLoading) return;
@@ -1035,91 +1094,61 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
         if (generatedData && Array.isArray(generatedData.slides) && generatedData.slides.length > 0) {
             setAiStatus("Rendering visual assets..."); // Explicit status
 
-            const slidePromises = generatedData.slides.map(async (slideData: any) => {
-                const newBgColor = slideData.backgroundColor || '#ffffff';
+            // Process sequentially to respect rate limits
+            const newSlidesToAdd: Slide[] = [];
 
-                // Parallel Background Gen
+            for (const slideData of generatedData.slides) {
+                const newBgColor = slideData.backgroundColor || '#ffffff';
                 let bgImage: string | undefined = undefined;
+
                 if (slideData.backgroundImagePrompt) {
-                    try {
-                        const img = await generateImage(slideData.backgroundImagePrompt, config);
-                        if (img) bgImage = img;
-                        else {
-                             // Fallback 1: Web Search for background
-                             const webImg = await findImageOnWeb(slideData.backgroundImagePrompt, apiKeyToUse);
-                             if (webImg) bgImage = webImg;
-                             else {
-                                // Fallback 2: Pollinations
-                                bgImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(slideData.backgroundImagePrompt)}?width=1280&height=720&nologo=true`;
-                             }
+                     setAiStatus("Generating background...");
+                     bgImage = await generateImageWithFallback(slideData.backgroundImagePrompt, config, 1280, 720);
+                }
+
+                const finalElements: SlideElement[] = [];
+                let zIdx = 1;
+
+                if (slideData.elements) {
+                    for (const elData of slideData.elements) {
+                        let content = elData.content || '';
+                        
+                        if (elData.type === 'image') {
+                            setAiStatus(`Generating image for ${elData.content.substring(0, 20)}...`);
+                            // Dimensions safe check
+                            const w = elData.width > 200 ? Math.floor(elData.width) : 1024;
+                            const h = elData.height > 200 ? Math.floor(elData.height) : 1024;
+                            content = await generateImageWithFallback(content, config, w, h);
                         }
-                    } catch(e) {
-                        console.warn("Background image gen failed", e);
-                        bgImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(slideData.backgroundImagePrompt)}?width=1280&height=720&nologo=true`;
+
+                        // Robustly handle missing dimensions
+                        const x = typeof elData.x === 'number' ? elData.x : 100;
+                        const y = typeof elData.y === 'number' ? elData.y : 100;
+                        const width = typeof elData.width === 'number' ? elData.width : 200;
+                        const height = typeof elData.height === 'number' ? elData.height : 50;
+
+                        finalElements.push({
+                            id: uid(),
+                            type: elData.type,
+                            content: content,
+                            link: elData.link,
+                            position: { x, y },
+                            size: { width, height },
+                            style: {
+                                zIndex: zIdx++,
+                                fontSize: elData.fontSize || 16,
+                                fontFamily: elData.fontFamily || 'Inter',
+                                color: elData.textColor || '#000000',
+                                backgroundColor: elData.bgColor,
+                                background: elData.bgColor,
+                                borderRadius: elData.type === 'button' ? 20 : 0,
+                                textAlign: 'center'
+                            }
+                        });
                     }
                 }
 
-                // Parallel Element Gen
-                const elementPromises = (slideData.elements || []).map(async (elData: any) => {
-                    let content = elData.content || '';
-                    if (elData.type === 'image') {
-                        try {
-                            const generatedImageUrl = await generateImage(content, config);
-                            if (generatedImageUrl) {
-                                content = generatedImageUrl;
-                            } else {
-                                // FALLBACK 1: Web Search
-                                console.warn("AI Image generation returned null, searching web...");
-                                const webImg = await findImageOnWeb(content, apiKeyToUse);
-                                if (webImg) {
-                                    content = webImg;
-                                } else {
-                                    // FALLBACK 2: Pollinations AI
-                                    console.warn("Web search failed, using Pollinations.");
-                                    content = `https://image.pollinations.ai/prompt/${encodeURIComponent(elData.content)}?width=${elData.width > 200 ? Math.floor(elData.width) : 1024}&height=${elData.height > 200 ? Math.floor(elData.height) : 1024}&nologo=true`;
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Image generation process failed", e);
-                            content = `https://image.pollinations.ai/prompt/${encodeURIComponent(elData.content)}?width=${elData.width > 200 ? Math.floor(elData.width) : 1024}&height=${elData.height > 200 ? Math.floor(elData.height) : 1024}&nologo=true`;
-                        }
-                    }
-
-                    // Robustly handle missing dimensions
-                    const x = typeof elData.x === 'number' ? elData.x : 100;
-                    const y = typeof elData.y === 'number' ? elData.y : 100;
-                    const width = typeof elData.width === 'number' ? elData.width : 200;
-                    const height = typeof elData.height === 'number' ? elData.height : 50;
-
-                    return {
-                        id: uid(),
-                        type: elData.type as any,
-                        content: content,
-                        link: elData.link,
-                        position: { x, y },
-                        size: { width, height },
-                        style: {
-                            zIndex: 1, // Placeholder zIndex
-                            fontSize: elData.fontSize || 16,
-                            fontFamily: elData.fontFamily || 'Inter',
-                            color: elData.textColor || '#000000',
-                            backgroundColor: elData.bgColor,
-                            background: elData.bgColor,
-                            borderRadius: elData.type === 'button' ? 20 : 0,
-                            textAlign: 'center'
-                        }
-                    } as SlideElement;
-                });
-
-                const resolvedElements = await Promise.all(elementPromises);
-
-                // Fix Z-Index
-                const finalElements = resolvedElements.map((el: SlideElement, index: number) => ({
-                    ...el,
-                    style: { ...el.style, zIndex: index + 1 }
-                }));
-
-                return {
+                newSlidesToAdd.push({
                     id: uid(),
                     name: slideData.name || `AI Page`,
                     backgroundColor: newBgColor,
@@ -1127,11 +1156,8 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                     duration: 3,
                     transition: (slideData.transition || 'fade').toLowerCase(), // Sanitize
                     elements: finalElements
-                } as Slide;
-            });
-
-            // Wait for all slides
-            const newSlidesToAdd = await Promise.all(slidePromises);
+                });
+            }
 
             if (newSlidesToAdd.length > 0) {
                 setPresentation(prev => ({
@@ -1746,129 +1772,133 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
   );
 }
 
-// --- Sub-Components ---
-
 function SidebarTool({ icon, label, onClick, isActive }: { icon: React.ReactNode, label: string, onClick: () => void, isActive?: boolean }) {
-    return (
-        <button 
-          onClick={onClick}
-          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-14 ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
-        >
-            <div className="[&>svg]:w-6 [&>svg]:h-6">{icon}</div>
-            <span className="text-[10px] font-medium">{label}</span>
-        </button>
-    );
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all w-16 ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+    >
+      <div className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-indigo-100' : ''}`}>{icon}</div>
+      <span className="text-[10px] font-medium">{label}</span>
+    </button>
+  );
 }
 
 function ShapeButton({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) {
     return (
-        <button 
-           onClick={onClick}
-           className="flex flex-col items-center justify-center gap-2 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 hover:border-indigo-200 transition-all text-gray-600 hover:text-indigo-600 aspect-square"
-        >
-            <div className="[&>svg]:w-8 [&>svg]:h-8 opacity-70">{icon}</div>
-            <span className="text-xs font-medium">{label}</span>
-        </button>
+      <button 
+        onClick={onClick}
+        className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 border border-gray-100 transition-all group aspect-square"
+      >
+        <div className="text-gray-400 group-hover:text-indigo-600 transition-colors transform group-hover:scale-110 duration-200">{icon}</div>
+        <span className="text-xs font-medium text-gray-600 group-hover:text-indigo-900">{label}</span>
+      </button>
     );
 }
 
 function PresentationPlayer({ presentation, onExit, autoPlay, onComplete }: { presentation: Presentation, onExit: () => void, autoPlay?: boolean, onComplete?: () => void }) {
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [scale, setScale] = useState(1);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
-    const handleResize = () => {
-        const s = Math.min(window.innerWidth / 960, window.innerHeight / 540);
-        setScale(s);
-    };
-    handleResize();
+    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-  
-  useEffect(() => {
-    if (autoPlay) {
-        const slide = presentation.slides[currentSlideIndex];
-        const timer = setTimeout(() => {
-            if (currentSlideIndex < presentation.slides.length - 1) {
-                setCurrentSlideIndex(prev => prev + 1);
-            } else {
-                if (onComplete) onComplete();
-            }
-        }, slide.duration * 1000);
-        return () => clearTimeout(timer);
+    
+    // Request fullscreen
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(() => {});
     }
-  }, [currentSlideIndex, autoPlay, presentation.slides, onComplete]);
+
+    return () => {
+        window.removeEventListener('resize', handleResize);
+        if (document.exitFullscreen && document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
+    };
+  }, []);
+
+  useEffect(() => {
+      if(!autoPlay) return;
+      const slideDuration = (presentation.slides[currentIndex].duration || 3) * 1000;
+      const timer = setTimeout(() => {
+          if(currentIndex < presentation.slides.length - 1) {
+              setCurrentIndex(prev => prev + 1);
+          } else {
+              if (onComplete) onComplete();
+          }
+      }, slideDuration);
+      return () => clearTimeout(timer);
+  }, [currentIndex, autoPlay, onComplete, presentation.slides]);
 
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === 'ArrowRight' || e.key === ' ') {
-              if (currentSlideIndex < presentation.slides.length - 1) setCurrentSlideIndex(prev => prev + 1);
-          } else if (e.key === 'ArrowLeft') {
-              if (currentSlideIndex > 0) setCurrentSlideIndex(prev => prev - 1);
-          } else if (e.key === 'Escape') {
-              onExit();
+          if (e.key === 'Escape') onExit();
+          if (e.key === 'ArrowRight' || e.key === 'Space') {
+              if (currentIndex < presentation.slides.length - 1) setCurrentIndex(prev => prev + 1);
+          }
+          if (e.key === 'ArrowLeft') {
+              if (currentIndex > 0) setCurrentIndex(prev => prev - 1);
           }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSlideIndex, presentation.slides.length, onExit]);
+  }, [currentIndex, onExit, presentation.slides.length]);
 
-  const currentSlide = presentation.slides[currentSlideIndex];
+  const currentSlide = presentation.slides[currentIndex];
+  // Calculate scale to fit screen while maintaining aspect ratio
+  const scale = Math.min(windowSize.width / 960, windowSize.height / 540);
+  
+  // Navigation for buttons in view mode
+  const handleNavigate = (link: string) => {
+      // Check if link is a number (slide index) or name
+      const targetIndex = presentation.slides.findIndex(s => s.name === link || s.id === link);
+      if (targetIndex !== -1) {
+          setCurrentIndex(targetIndex);
+      } else if (link.startsWith('http')) {
+          window.open(link, '_blank');
+      }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex items-center justify-center overflow-hidden">
-       <div className="absolute top-4 right-4 z-50 flex gap-4">
-          {!autoPlay && <div className="text-white/50 text-sm font-mono bg-black/50 px-2 py-1 rounded">{currentSlideIndex + 1} / {presentation.slides.length}</div>}
-          <button onClick={onExit} className="text-white/50 hover:text-white p-1 bg-black/20 rounded-full hover:bg-white/20"><X size={24} /></button>
-       </div>
+    <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center overflow-hidden">
+        <div style={{ 
+            width: 960, 
+            height: 540, 
+            transform: `scale(${scale})`, 
+            transformOrigin: 'center' 
+        }}>
+             <AnimatePresence mode="wait">
+                <motion.div
+                    key={currentSlide.id}
+                    variants={getSlideTransition(currentSlide.transition)}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    className="absolute inset-0"
+                >
+                    <SlideEditor 
+                        slide={currentSlide} 
+                        selectedElementId={null} 
+                        onElementUpdate={() => {}} 
+                        onElementSelect={() => {}} 
+                        scale={1}
+                        mode="view"
+                        onNavigate={handleNavigate}
+                    />
+                </motion.div>
+             </AnimatePresence>
+        </div>
 
-       <div style={{ width: 960 * scale, height: 540 * scale, position: 'relative' }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-                key={currentSlide.id}
-                variants={getSlideTransition(currentSlide.transition)}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="absolute inset-0"
-                style={{ width: '100%', height: '100%' }}
-            >
-                <SlideEditor 
-                    slide={currentSlide} 
-                    selectedElementId={null} 
-                    onElementUpdate={() => {}} 
-                    onElementSelect={() => {}} 
-                    scale={scale}
-                    mode="view"
-                    onNavigate={(link) => {
-                         const targetIdx = presentation.slides.findIndex(s => s.id === link || s.name === link);
-                         if(targetIdx >= 0) setCurrentSlideIndex(targetIdx);
-                         else if(link.startsWith('http')) window.open(link, '_blank');
-                    }}
-                />
-            </motion.div>
-          </AnimatePresence>
-       </div>
-
-       {!autoPlay && (
-           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-50">
-               <button 
-                disabled={currentSlideIndex === 0}
-                onClick={() => setCurrentSlideIndex(p => p - 1)}
-                className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white disabled:opacity-30 backdrop-blur-md transition-colors"
-               >
-                 <ChevronLeft />
-               </button>
-               <button 
-                disabled={currentSlideIndex === presentation.slides.length - 1}
-                onClick={() => setCurrentSlideIndex(p => p + 1)}
-                className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white disabled:opacity-30 backdrop-blur-md transition-colors"
-               >
-                 <ChevronRight />
-               </button>
-           </div>
-       )}
+        {!autoPlay && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 bg-gray-900/80 backdrop-blur px-6 py-3 rounded-full text-white opacity-0 hover:opacity-100 transition-opacity z-50">
+                <button onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))} className="hover:text-indigo-400 disabled:opacity-50" disabled={currentIndex===0}><ChevronLeft /></button>
+                <span className="font-mono text-sm flex items-center">{currentIndex + 1} / {presentation.slides.length}</span>
+                <button onClick={() => setCurrentIndex(Math.min(presentation.slides.length - 1, currentIndex + 1))} className="hover:text-indigo-400 disabled:opacity-50" disabled={currentIndex===presentation.slides.length-1}><ChevronRight /></button>
+                <div className="w-px bg-white/20 mx-2"></div>
+                <button onClick={onExit} className="hover:text-red-400"><X /></button>
+            </div>
+        )}
     </div>
   );
 }
@@ -1876,21 +1906,33 @@ function PresentationPlayer({ presentation, onExit, autoPlay, onComplete }: { pr
 function CodeExportModal({ presentation, onClose }: { presentation: Presentation, onClose: () => void }) {
     const [copied, setCopied] = useState(false);
     
-    // Very simplified React code generator for the website
-    const generateReactCode = () => {
-        return `// ${presentation.title} - Generated by Nexus
-import React from 'react';
+    // Simple export logic for demonstration
+    const code = `import React from 'react';
 
-const WEBSITE_DATA = ${JSON.stringify(presentation, null, 2)};
+// Generated from Nexus: ${presentation.title}
 
-export default function Website() {
-  // Implementation of renderer...
-  return <div>See JSON data for structure</div>;
+export default function Presentation() {
+  return (
+    <div className="flex flex-col w-full">
+      ${presentation.slides.map(slide => `
+      {/* Slide: ${slide.name || 'Untitled'} */}
+      <section className="relative w-full h-screen overflow-hidden" style={{ backgroundColor: '${slide.backgroundColor}' }}>
+        <div className="relative max-w-[1200px] mx-auto h-full">
+          ${slide.elements.map(el => {
+            // Simplified positioning logic
+            return `
+          <div style={{ position: 'absolute', left: '${(el.position.x/960*100).toFixed(1)}%', top: '${(el.position.y/540*100).toFixed(1)}%' }}>
+            ${el.type === 'text' ? `<p className="text-xl font-bold">${el.content}</p>` : ''}
+            ${el.type === 'button' ? `<button className="px-6 py-3 bg-blue-600 text-white rounded-full">${el.content}</button>` : ''}
+            ${el.type === 'image' ? `<img src="${el.content}" className="max-w-md rounded-lg shadow-lg" />` : ''}
+          </div>`;
+          }).join('')}
+        </div>
+      </section>`).join('')}
+    </div>
+  );
 }
 `;
-    };
-
-    const code = generateReactCode();
 
     const handleCopy = () => {
         navigator.clipboard.writeText(code);
@@ -1899,27 +1941,21 @@ export default function Website() {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white rounded-xl w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                    <h3 className="font-bold text-lg flex items-center gap-2"><Code size={20} className="text-indigo-600"/> Export Code</h3>
-                    <button onClick={onClose}><X size={20} className="text-gray-400 hover:text-gray-600"/></button>
-                </div>
-                <div className="flex-1 overflow-auto p-0 bg-gray-900 text-gray-100 font-mono text-sm relative">
-                    <button 
-                        onClick={handleCopy}
-                        className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded flex items-center gap-2 text-xs backdrop-blur-md transition-all border border-white/10"
-                    >
-                        {copied ? <Check size={14}/> : <Copy size={14}/>} {copied ? 'Copied!' : 'Copy Code'}
-                    </button>
-                    <pre className="p-6">
-                        <code>{code}</code>
-                    </pre>
-                </div>
-                <div className="p-4 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
-                    * This code is a representation. Use the JSON export for full data fidelity in the Nexus player.
-                </div>
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+                 <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                     <h3 className="font-bold flex items-center gap-2"><Code className="text-indigo-600"/> React Export</h3>
+                     <div className="flex gap-2">
+                         <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors">
+                             {copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? 'Copied' : 'Copy Code'}
+                         </button>
+                         <button onClick={onClose} className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-500"><X size={20}/></button>
+                     </div>
+                 </div>
+                 <div className="flex-1 overflow-auto bg-[#1e1e1e] p-4">
+                     <pre className="text-gray-100 font-mono text-sm leading-relaxed whitespace-pre-wrap">{code}</pre>
+                 </div>
+             </div>
         </div>
     );
 }
