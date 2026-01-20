@@ -4,7 +4,7 @@ import {
   MoreVertical, Plus, Trash2, Wand2, Download, Video, X,
   Circle, Triangle, Star, Box, Search, Upload, Hexagon, ArrowRight,
   Layout, LogOut, Crown, ChevronLeft, ChevronRight, CreditCard, Sparkles, Mail, Lock, User as UserIcon, Bug, Coins, ArrowRightLeft, Check,
-  Copy, Layers, ArrowUp, ArrowDown, Maximize, Droplets, AlignLeft, AlignCenter, AlignRight, Code, Globe, Link as LinkIcon, MousePointerClick, Settings, Key, Cpu, MessageSquare, Send, Zap, FileJson, FileType, FileVideo, AlertTriangle
+  Copy, Layers, ArrowUp, ArrowDown, Maximize, Droplets, AlignLeft, AlignCenter, AlignRight, Code, Globe, Link as LinkIcon, MousePointerClick, Settings, Key, Cpu, MessageSquare, Send, Zap, FileJson, FileType, FileVideo, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { SlideEditor } from './components/SlideEditor';
 import { Slide, SlideElement, Presentation, ShapeType, User, TransitionType } from './types';
@@ -18,7 +18,8 @@ import {
   deletePresentation,
   loginWithEmail,
   registerWithEmail,
-  reportBug
+  reportBug,
+  getUserDefaultKey
 } from './services/firebase';
 import html2canvas from 'html2canvas';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
@@ -668,6 +669,12 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
       setKeyError(false);
   }
   
+  const handleUseDefaultKey = async () => {
+      const key = await getUserDefaultKey(user);
+      saveKey(key);
+      alert("Default Nexus Key applied!");
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -1782,16 +1789,34 @@ function Editor({ presentation: initialPres, user, onBack, onSave }: { presentat
                                                 className="w-full text-sm border border-indigo-300 ring-2 ring-indigo-100 rounded p-2"
                                                 autoFocus
                                             />
-                                            <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-xs text-indigo-600 hover:underline block text-right">Get new key &rarr;</a>
+                                            <div className="flex justify-between items-center">
+                                                <button 
+                                                    onClick={handleUseDefaultKey}
+                                                    className="text-xs text-indigo-600 hover:underline flex items-center gap-1 font-semibold"
+                                                >
+                                                    <RefreshCw size={10} /> Use Default Nexus Key
+                                                </button>
+                                                <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-xs text-gray-500 hover:underline">Get personal key &rarr;</a>
+                                            </div>
                                         </div>
                                     ) : (
-                                        <input 
-                                            type="password"
-                                            value={providerKey}
-                                            onChange={(e) => saveKey(e.target.value)}
-                                            placeholder={`Enter ${selectedProvider} API Key`}
-                                            className={`w-full text-sm border rounded p-2 ${keyError ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
-                                        />
+                                        <>
+                                            <input 
+                                                type="password"
+                                                value={providerKey}
+                                                onChange={(e) => saveKey(e.target.value)}
+                                                placeholder={`Enter ${selectedProvider} API Key`}
+                                                className={`w-full text-sm border rounded p-2 ${keyError ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                                            />
+                                            {selectedProvider === 'gemini' && (
+                                                <button 
+                                                    onClick={handleUseDefaultKey}
+                                                    className="text-xs text-indigo-600 hover:underline mt-1 flex items-center gap-1"
+                                                >
+                                                    <RefreshCw size={10} /> Reset to Default Key
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>

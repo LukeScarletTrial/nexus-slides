@@ -40,6 +40,8 @@ const firebaseConfig = {
   measurementId: "G-RKHVEP54YK"
 };
 
+const DEFAULT_GEN_KEY = "AIzaSyA9GRmzCC1osRlM4uClh7WgjtqQFWEJBm4";
+
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
@@ -80,6 +82,51 @@ const loginAsDemoUser = (name = 'Demo User', email = 'demo@nexus.app', rememberM
   return mockUser;
 };
 
+const isDemoUser = (user: User) => user.uid.startsWith('demo-') || user.uid.startsWith('local-');
+
+// --- User Profile & Key Management ---
+
+export const ensureUserDocument = async (user: User) => {
+  if (isFirebaseAvailable && db && !isDemoUser(user)) {
+    try {
+      const userRef = doc(db, "users", user.uid);
+      // Ensure the DefaultGenKey exists for every account in Firestore
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        DefaultGenKey: DEFAULT_GEN_KEY,
+        lastLogin: Date.now()
+      }, { merge: true });
+    } catch (e) {
+      console.error("Error creating/updating user doc:", e);
+    }
+  }
+};
+
+export const getUserDefaultKey = async (user: User | null): Promise<string> => {
+    // If no user or demo user, return the constant directly
+    if (!user || isDemoUser(user)) return DEFAULT_GEN_KEY;
+
+    if (isFirebaseAvailable && db) {
+        try {
+            const userRef = doc(db, "users", user.uid);
+            const snapshot = await getDoc(userRef);
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                if (data.DefaultGenKey) {
+                    return data.DefaultGenKey;
+                }
+            }
+            // If doc exists but key missing, or doc doesn't exist, try to set it now
+            await ensureUserDocument(user);
+        } catch (e) {
+            console.error("Error fetching user key from Firestore:", e);
+        }
+    }
+    return DEFAULT_GEN_KEY;
+};
+
 // --- Auth Services ---
 
 export const registerWithEmail = async (name: string, email: string, pass: string, rememberMe: boolean = false): Promise<User> => {
@@ -88,7 +135,9 @@ export const registerWithEmail = async (name: string, email: string, pass: strin
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       await updateProfile(userCredential.user, { displayName: name });
-      return mapUser({ ...userCredential.user, displayName: name } as any);
+      const user = mapUser({ ...userCredential.user, displayName: name } as any);
+      await ensureUserDocument(user); // Create Firestore Doc with Key
+      return user;
     } catch (error: any) {
        console.error("Registration error:", error);
        if (error.code === 'auth/operation-not-allowed' || error.code === 'auth/configuration-not-found') {
@@ -107,7 +156,9 @@ export const loginWithEmail = async (email: string, pass: string, rememberMe: bo
     try {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-      return mapUser(userCredential.user);
+      const user = mapUser(userCredential.user);
+      await ensureUserDocument(user); // Ensure Firestore Doc exists with Key
+      return user;
     } catch (error: any) {
        console.error("Login error:", error);
        // Fallback for demo account or if backend isn't ready
@@ -130,7 +181,9 @@ export const signInWithGoogle = async (rememberMe: boolean = false): Promise<Use
       provider.setCustomParameters({ prompt: 'select_account' });
       
       const result = await signInWithPopup(auth, provider);
-      return mapUser(result.user);
+      const user = mapUser(result.user);
+      await ensureUserDocument(user); // Ensure Firestore Doc exists with Key
+      return user;
     } catch (error: any) {
       console.error("Auth error:", error);
       // Fallback only on specific configuration errors, otherwise throw real error so user knows
@@ -186,8 +239,6 @@ export const reportBug = async (user: User, description: string): Promise<{ succ
 };
 
 // --- Firestore Services ---
-
-const isDemoUser = (user: User) => user.uid.startsWith('demo-') || user.uid.startsWith('local-');
 
 export const savePresentation = async (presentation: Presentation, user: User) => {
   const cleanPresentation = JSON.parse(JSON.stringify(presentation));
